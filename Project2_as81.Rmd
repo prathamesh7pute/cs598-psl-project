@@ -1,0 +1,120 @@
+---
+title: 'STAT 542 / CS 598: Project 2'
+author: "Fall 2019, by Prathamesh, Vivek and Athul (as81)"
+date: 'Due: Monday, Dec 16 by 11:59 PM Pacific Time'
+output:
+  pdf_document:
+  html_document:
+    df_print: paged
+    toc: no
+    toc_depth: '2'
+---
+
+```{r setup, include=FALSE}
+  knitr::opts_chunk$set(include = TRUE)  # TRUE for solution; FALSE for questions set
+
+  knitr::opts_chunk$set(echo = FALSE) #FALSE for report
+  knitr::opts_chunk$set(eval = FALSE) #FALSE for report
+  knitr::opts_chunk$set(message = FALSE)
+  knitr::opts_chunk$set(warning = FALSE)
+ # knitr::opts_chunk$set(fig.width=12, fig.height=8, out.width = '70%', fig.align = "center")
+  knitr::opts_chunk$set(out.width = '70%', fig.align = "center")
+  options(width = 90)
+```
+
+```{css, echo=FALSE}
+.solution {
+background-color: #e6ffe6;
+}
+```
+
+```{r}
+rm(list=ls())
+#library(magick)
+#library(imager)
+library(EBImage)
+
+benign_files <- list.files("542/benign/")
+malignant_files <- list.files("542/malignant/")
+resize_w <- 100
+resize_h <- 100
+num_channels <- 3
+number_of_files <- 150
+
+benign_mat <- matrix(NA,nrow=number_of_files,ncol=resize_w*resize_h*num_channels)
+malignant_mat <- matrix(NA,nrow=number_of_files,ncol=resize_w*resize_h*num_channels)
+count <- 1
+for (i in benign_files){
+  file_open <- paste("542/benign/",i,sep="")
+  img <- readImage(file_open)
+  img1 <- resize(img,resize_w,resize_h)
+  mat_img <- img1@.Data
+  vec_img <- as.vector(mat_img)
+  benign_mat[count,] <- vec_img
+  count <- count+1
+}
+
+count <- 1
+for (i in malignant_files){
+  file_open <- paste("542/malignant/",i,sep="")
+  img <- readImage(file_open)
+  img1 <- resize(img,resize_w,resize_h)
+  mat_img <- img1@.Data
+  vec_img <- as.vector(mat_img)
+  malignant_mat[count,] <- vec_img
+  count <- count+1
+}
+
+```
+
+```{r}
+# Create the dataset
+data_cancer <- rbind(benign_mat,malignant_mat)
+data_cancer <- cbind(c(rep(0,150),rep(1,150)),data_cancer)
+```
+
+```{r}
+set.seed(1)
+train=sample (1: nrow(data_cancer), nrow(data_cancer)*0.8)
+test <- (-train)
+pca.train <- data_cancer[train,]
+pca.test <- data_cancer[test,]
+```
+
+```{r}
+pca.Cancer <- prcomp(pca.train[,-1],scale. = T)
+```
+
+```{r}
+frac_variance <- (pca.Cancer$sdev^2)/sum(pca.Cancer$sdev^2)
+plot(cumsum(frac_variance), xlab = "Principal Component",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b")
+```
+```{r}
+#I chose first 50 components
+sum(frac_variance[1:100])
+```
+```{r}
+train.data <- data.frame(y = pca.train[,1], pca.Cancer$x)
+train.data <- train.data[,1:100]
+test.data <- predict(pca.Cancer, newdata = pca.test[,-1])
+test.data <- test.data[,1:100]
+```
+
+```{r}
+library(randomForest)
+num_trees <- c(1,4,10,25,50,100,200,500,1000)
+num_nodes <- c(1,5,10,20,50) 
+for(i in num_trees){
+  for(j in num_nodes){
+    rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=100, nodesize = 5)
+    temp <- cbind(as.numeric(as.character(rfModel$predicted)),(train.data$y))
+    yhat.test = predict(rfModel, test.data)
+    training_error <- length(which(temp[,1]!=temp[,2]))*100/240
+    temp <- cbind(as.numeric(as.character(yhat.test)),(pca.test[,1]))
+    test_error <- length(which(temp[,1]!=temp[,2]))*100/60
+    cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error,"\n")
+  }
+}
+```
