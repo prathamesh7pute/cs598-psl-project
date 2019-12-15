@@ -41,7 +41,6 @@ background-color: #e6ffe6;
   library(kableExtra)
   library(grid)
   library(gridExtra)
-  library(EBImage)
   library(class)
   library(randomForest)
   library(caret)
@@ -49,6 +48,7 @@ background-color: #e6ffe6;
   library(doMC)
   library(factoextra)
   library(glmnet)
+  library(EBImage)
 ```
 
 ### [10 Points, half a page] Project description and summary. This part should summerise your goal, your approach, and your results.
@@ -176,7 +176,7 @@ half page description goes here
 ```{r include = FALSE}
   #PCA 
   set.seed(1)
-  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.8)
+  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
   test <- (-train)
   pca.train <- data_cancer[train,]
   pca.test <- data_cancer[test,]
@@ -308,8 +308,10 @@ half page description goes here
 
 ```{r include = FALSE}
   rm(list = ls())
+  library(EBImage)
+  #detach(package:randomForest)
   extract_features <- function(img_in) {
-    #img_in <- img_b
+    img_in <- img
     resize_w <- 400
     resize_h <- 400
     img_resize <- resize(img_in, resize_w, resize_h)
@@ -328,11 +330,11 @@ half page description goes here
                   shape = 'gaussian',
                   sigma = 5)
     img_lp = filter2(img_gray, w)
-    
+  
     img_in_th <- img_lp
     threshold <- otsu(img_in_th)
     #cat(threshold,"\n")
-    img_th = combine(mapply(
+    img_th = EBImage::combine(mapply(
       function(frame, th)
         frame > th,
       getFrames(img_in_th),
@@ -366,7 +368,7 @@ half page description goes here
     }
     reg_f <- area_f / perimeter_f
     
-    return(c(area_f, perimeter_f, rgb_f))
+   return(c(area_f, perimeter_f, rgb_f))
   }
 ```
 
@@ -417,7 +419,7 @@ half page description goes here
     )
   data_cancer[which(is.infinite(data_cancer) == TRUE)] <- 0
   set.seed(1)
-  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.8)
+  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
   test <- (-train)
   train.data <- data_cancer[train, ]
   test.data <- data_cancer[test, ]
@@ -464,7 +466,7 @@ half page description goes here
   confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
 ```
 
-```{r include = FALSE}
+```{r}
   varImpPlot(best_rfModel)
 ```
 
