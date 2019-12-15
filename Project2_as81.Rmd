@@ -11,6 +11,8 @@ output:
   html_document:
     toc: no
     df_print: paged
+  bibliography: Biblio-Bibtex.bib
+  link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -172,7 +174,7 @@ half page description goes here
   kable(results, caption = "Lasso Regression Results")
 ```
 
-
+PCA is an excellent choice when it comes to images because inherently due to its natur, there is spatial corellation among pixel. Instead of using all the pixes, we can signifcantly reduce the number of features which encompass most of the variation. We choose 27 number of components which accounts for over 90% of the variation.
 ```{r include = FALSE}
   #PCA 
   set.seed(1)
@@ -237,8 +239,8 @@ half page description goes here
 
 ```{r include = FALSE, results = "hide"}
   set.seed(1)
-  num_trees <- c(100) #c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
-  num_nodes <- c(5) #c(1,5,10,20,50) 
+  num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_nodes <- c(1,5,10,20,50) 
   all_data_x <- rbind(test.data, train.data[, -1])
   all_data_y <- c(pca.test[, 1], train.data[, 1])
   best_i <- 1
@@ -273,12 +275,13 @@ half page description goes here
   }
 ```
 
-
-```{r include = FALSE}
+We run a random forest through a grid search through of number of trees (1 to 10000) and nodesize(1 to 50). We find that our best model is with 1250 trees and a nodesize of 5. Our accuracy on the entire set is 93.33%
+```{r include = TRUE}
   yhat.all <- predict(best_rfModel, all_data_x)
   temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
   all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-  confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+  temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+  kable(temp$table, caption="RandomForest Confusion Matrix")
 ```
 
 ```{r include = FALSE}
@@ -296,19 +299,42 @@ half page description goes here
 
 ### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
 
-1 page description goes here
+The American Academy of Dermatology Association (@aad) listes the ABCDE of detecting Melanoma. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. Since in this project statement, are given a series of pictures over a lesion over a period of time, we will not be able to create a specific feature for Evolving. Hence, we concentrate on the remaining.  
+A great tools for us is EBImage which is package developed by @Pau2010 which provides us very usable functions for image processing tasks. We use various features of this package for our feature engineering.
+@RA2012 provides high level features one could use to help engineer our features. Their main work talks about the different way to quantize irregularities. They use a mix of both coarse and fine grain methods to achieve this.
+@SJ2015 Shivangi et al, also talks about a good pipeline to this. Their work diffs in that they introduce quantitative metrics to mark irregulaties in shape. They also take into account the size of the lesion. However to this accurately they must have ensured that the each image is taken from the same distance and focus. We do not have that information regarding our dataset, so we must rely on ration. One of the interesting features proposed in using Circularity Index, it is the ration of (4*pi*Area)/(Perimeter*Perimeter). This is a geat metric becaus this is scale invariant.
+Of course is @SJ2015 and @Pau@2010, they do concentrate a fair amount on preprocessing steps like illumination and segmentation.
 
 
 ### [10 Points, 1 page] Feature engineering. Motivated by what you have read (or your understanding), process the data in a reasonable way such that the new variables are more intuitive to your collaborator/clinicians. You need to describe clearly what is your data processing criteria and how your variables are calculated.
 
-1 page description goes here
+![Feature Engineering Pipeline](Pipeline.jpg)
+
+Our pipeline takes an input image and prepares it for feature extraction. Once, we have our features, we then run it through various classifiers to observe the results. All steps in the preprocessing steps are done in 3 planes. We keep results from all these planes, as the classifier should be able to choose from them.
+Preprocessing steps :
+1. Resize all images to 400 x400
+2. Convert Color to Grayscale but also preseve the color image.
+3. We run it through a low pass filter to remove hairs and scale markings. 
+4. Similar to @SJ2015, we do automatic thresholding by Otsu in each plane which generate the mask. We apply this mask of the low pass filtered image so that we dont see any small blobs or markings inside the lesion.
+5. We apply image detection on this segmented filter.
+6. We take the color image and pass it through the segmented image, so we will only see color in the segmented section of the interested area.
+
+Do notice from the image above that the red channel does not yield very good preprocessing results while the green and blue channels are very successful in isolation the regions.
+
+We generate 5 features for each of the channels:
+1. Area: We count the number pixels in the mask of segmentation which are 0.
+2. Perimeter: In the edge detected image, we count the number of pixels which are 1.
+3. After applying the segmentation mask on the color image, we sum the total pixels that are in the segmented area.
+4. Regularity Parameter: The ration of area / perimeter
+5. Circularity Index: The ratio of (4*pi*area)/(perimeter^2)
+
 
 
 ### [20 Points, 2 page] Classification models based on new features. Fit two different classification models to identify malignant moles. You can either use the ones from Question 1 or use some new models if you believe they may perform better on the new features. Same requirements of Question 1 apply to this part. Besides, you should focus more on variable selection and interpretation.
 
 ```{r include = FALSE}
   extract_features <- function(img_in) {
-    img_in <- img
+    #img_in <- img
     resize_w <- 400
     resize_h <- 400
     img_resize <- resize(img_in, resize_w, resize_h)
@@ -357,15 +383,15 @@ half page description goes here
     rgb_f <- c(0, 0, 0)
     img_col_thresh <- img_resize * img_th_val
     for (i in 1:3) {
-      area_f[i] <- length(which(img_th_val[, , i] == 1)) / (resize_h * resize_w)
+      area_f[i] <- length(which(img_th_val[, , i] == 0)) / (resize_h * resize_w)
       perimeter_f[i] <-
         length(which(img_fhi[, , i] == 1)) / (resize_h * resize_w)
       rgb_f[i] <-
-        sum(img_col_thresh[which(img_th_val[, , i] == 1)]) / (resize_h * resize_w)
+        sum(img_col_thresh[which(img_th_val[, , i] == 0)]) / (resize_h * resize_w)
     }
     reg_f <- area_f / perimeter_f
     
-   return(c(area_f, perimeter_f, rgb_f))
+   return(c(area_f, perimeter_f, rgb_f, (area_f/perimeter_f), (4*pi*area_f/perimeter_f^2)))
   }
 ```
 
@@ -373,8 +399,8 @@ half page description goes here
   benign_files <- list.files("542/benign/")
   malignant_files <- list.files("542/malignant/")
   number_of_files <- 150
-  benign_mat <- matrix(NA, nrow = number_of_files, ncol = 9)
-  malignant_mat <- matrix(NA, nrow = number_of_files, ncol = 9)
+  benign_mat <- matrix(NA, nrow = number_of_files, ncol = 15)
+  malignant_mat <- matrix(NA, nrow = number_of_files, ncol = 15)
   count <- 1
   for (i in benign_files) {
     file_open <- paste("542/benign/", i, sep = "")
@@ -397,7 +423,7 @@ half page description goes here
   # Create the dataset
   data_cancer <- rbind(benign_mat, malignant_mat)
   data_cancer <-
-    cbind(c(rep(0, 150), rep(1, 150)), data_cancer, data_cancer[, 1:3] / data_cancer[, 4:6])
+    cbind(c(rep(0, 150), rep(1, 150)), data_cancer)
   colnames(data_cancer) <-
     c(
       "y",
@@ -412,7 +438,10 @@ half page description goes here
       "color_b",
       "reg_r",
       "reg_g",
-      "reg_b"
+      "reg_b",
+      "crc_r",
+      "crc_g",
+      "crc_b"
     )
   data_cancer[which(is.infinite(data_cancer) == TRUE)] <- 0
   set.seed(1)
@@ -424,8 +453,8 @@ half page description goes here
 
 ```{r include = FALSE}
   set.seed(1)
-  num_trees <- c(100) #c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
-  num_nodes <- c(5) #c(1,5,10,20,50) 
+  num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_nodes <- c(1,5,10,20,50) 
   all_data_x <- rbind(test.data[,-1],train.data[,-1])
   all_data_y <- c(test.data[,1],train.data[,1])
   best_i <- 1;
@@ -453,20 +482,25 @@ half page description goes here
   }
 ```
 
+As with question1, we run through a random forest model with a grid search on number of tress and nodesize. The best model was with 500 trees and 5 nodesize with an accuracy of 92%. 
 
-
-```{r include = FALSE}
+```{r include = TRUE}
   #best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j)
   yhat.all <- predict(best_rfModel, all_data_x)
   temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
   all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-  confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+  temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+  kable(temp$table, caption="RandomForest Confusion Matrix")
 ```
 
 ```{r}
   varImpPlot(best_rfModel)
 ```
 
+By Making understandable features, we see from above that:
+1. Area, color and perimeter are key features. If the lesion contains multiple colors, then as @aad explained, it is a high chance of cancer.
+2. The next set of feature are the regularity and circularity index respectively.
+3. Red is the least important channel in the model. We saw during preprocessing as well, the Red plane didn not yield good results as well.
 ```{r include = FALSE}
   tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
   best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
