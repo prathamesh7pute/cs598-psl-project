@@ -30,6 +30,7 @@ background-color: #e6ffe6;
 
 
 ```{r include = FALSE}
+  rm(list = ls(all.names = TRUE))
   mypackages = c("knitr", "kableExtra", "grid", "gridExtra", "EBImage", "class", "randomForest", "caret", "e1071", "doMC", "factoextra", "glmnet")
   tmp = setdiff(mypackages, rownames(installed.packages()))
   if (length(tmp) > 0)
@@ -110,31 +111,31 @@ half page description goes here
 ```
 
 ```{r include = FALSE, results = "hide"}
-  # knn
-
-  # default choice of k normally by sqrt of number of data
-  # which gives value of 15 so choosing nearby values
-  k = sqrt(dim(train.data)[1])
-  
-  k_values <- c(1, 5, 10, 13,  15, 16, 20, 25)
-  best_k  <- 1;
-  best_accuracy <- 0;
-
-  for(k in k_values) {
-    knn_result <- knn(train=train.data[, -1], test=test.data[, -1], cl=train.data[, 1], k=k)
-    accuracy = 100 * mean(test.data[, 1] == knn_result)
-    cat("k:",k,"Accuracy:",accuracy,"\n")
-
-    if(accuracy > best_accuracy){
-      best_k <- k
-      best_accuracy <- accuracy
-    }
-  }
-  results = data.frame("K" = best_k, "accuracy" = best_accuracy)
+  # # knn
+  # 
+  # # default choice of k normally by sqrt of number of data
+  # # which gives value of 15 so choosing nearby values
+  # k = sqrt(dim(train.data)[1])
+  # 
+  # k_values <- c(1, 5, 10, 13,  15, 16, 20, 25)
+  # best_k  <- 1;
+  # best_accuracy <- 0;
+  # 
+  # for(k in k_values) {
+  #   knn_result <- knn(train=train.data[, -1], test=test.data[, -1], cl=train.data[, 1], k=k)
+  #   accuracy = 100 * mean(test.data[, 1] == knn_result)
+  #   cat("k:",k,"Accuracy:",accuracy,"\n")
+  # 
+  #   if(accuracy > best_accuracy){
+  #     best_k <- k
+  #     best_accuracy <- accuracy
+  #   }
+  # }
+  # results = data.frame("K" = best_k, "accuracy" = best_accuracy)
 ```
 
 ```{r}  
-  kable(results, caption = "KNN")
+  # kable(results, caption = "KNN")
 ```
 
 ```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
@@ -160,7 +161,6 @@ half page description goes here
   
   summary(train_glmnet_model)
   
-
   pred <- predict(train_glmnet_model, s = best_lambda, newx = test.data[, -1], type = "class")
   accuracy = mean(test.data[, 1] == pred)
   
@@ -225,20 +225,20 @@ half page description goes here
 
 ```{r include = FALSE}
   #I chose first 30 components
-  sum(frac_variance[1:100])
+  sum(frac_variance[1:27])
 ```
 
 ```{r include = FALSE}
   train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
-  train.data <- train.data[, 1:101]
+  train.data <- train.data[, 1:28]
   test.data <- predict(pca.Cancer, newdata = pca.test[, -1])
-  test.data <- test.data[, 1:100]
+  test.data <- test.data[, 1:27]
 ```
 
 ```{r include = FALSE, results = "hide"}
   set.seed(1)
-  num_trees <- c(1, 4, 10, 25, 50, 100, 200, 500, 1000, 1250, 1500, 2000, 5000, 10000)
-  num_nodes <- c(1, 5, 10, 20, 50)
+  num_trees <- c(100) #c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_nodes <- c(5) #c(1,5,10,20,50) 
   all_data_x <- rbind(test.data, train.data[, -1])
   all_data_y <- c(pca.test[, 1], train.data[, 1])
   best_i <- 1
@@ -288,9 +288,9 @@ half page description goes here
 ```
 
 ```{r include = FALSE}
-  all_data_x <- rbind(test.data,train.data[,-1])
-  all_data_y <- c(pca.test[,1],train.data[,1])
-  svmPred <- predict(best_svm, all_data_x )
+  all_data_x <- rbind(test.data, train.data[, -1])
+  all_data_y <- c(pca.test[, 1], train.data[, 1])
+  svmPred <- predict(best_svm, all_data_x)
   confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
 ```
 
@@ -307,9 +307,6 @@ half page description goes here
 ### [20 Points, 2 page] Classification models based on new features. Fit two different classification models to identify malignant moles. You can either use the ones from Question 1 or use some new models if you believe they may perform better on the new features. Same requirements of Question 1 apply to this part. Besides, you should focus more on variable selection and interpretation.
 
 ```{r include = FALSE}
-  rm(list = ls())
-  library(EBImage)
-  #detach(package:randomForest)
   extract_features <- function(img_in) {
     img_in <- img
     resize_w <- 400
@@ -427,8 +424,8 @@ half page description goes here
 
 ```{r include = FALSE}
   set.seed(1)
-  num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
-  num_nodes <- c(1,5,10,20,50) 
+  num_trees <- c(100) #c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_nodes <- c(5) #c(1,5,10,20,50) 
   all_data_x <- rbind(test.data[,-1],train.data[,-1])
   all_data_y <- c(test.data[,1],train.data[,1])
   best_i <- 1;
@@ -481,3 +478,34 @@ half page description goes here
   confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
 ```
 
+
+```{r}
+# use parallel for performace 
+  registerDoMC(cores = 4)
+
+  # Ridge Regression
+  cv_glmnet_model <- cv.glmnet(train.data[, -1], train.data[, 1], parallel = TRUE, alpha=0, family="binomial")
+```
+
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}  
+  plot(cv_glmnet_model)
+```
+
+
+```{r}
+  best_lambda = cv_glmnet_model$lambda.1se
+  # training with best lambda selected from the cv
+  train_glmnet_model <- glmnet(train.data[, -1], train.data[, 1], lambda = best_lambda, alpha=0, family="binomial")
+  
+  summary(train_glmnet_model)
+  
+  pred <- predict(train_glmnet_model, s = best_lambda, newx = test.data[, -1], type = "class")
+  accuracy = mean(test.data[, 1] == pred)
+  
+  results = data.frame("Best lambda" = best_lambda, "Accuracy" = accuracy)
+```  
+
+
+```{r} 
+  kable(results, caption = "Ridge Regression Results")
+```
