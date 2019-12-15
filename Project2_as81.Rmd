@@ -1,25 +1,25 @@
 ---
 title: 'STAT 542 / CS 598: Project 2'
-author: "Fall 2019, by Prathamesh, Vivek and Athul (as81)"
+author: "Fall 2019, by Prathamesh(satpute3), Vivek(vivekg3) and Athul(as81)"
 date: 'Due: Monday, Dec 16 by 11:59 PM Pacific Time'
+header-includes:
+  - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+geometry: margin=2cm
 output:
   pdf_document:
-  html_document:
-    df_print: paged
     toc: no
-    toc_depth: '2'
+  html_document:
+    toc: no
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
   knitr::opts_chunk$set(include = TRUE)  # TRUE for solution; FALSE for questions set
-
-  knitr::opts_chunk$set(echo = FALSE) #FALSE for report
-  knitr::opts_chunk$set(eval = FALSE) #FALSE for report
+  knitr::opts_chunk$set(echo = TRUE)
   knitr::opts_chunk$set(message = FALSE)
   knitr::opts_chunk$set(warning = FALSE)
- # knitr::opts_chunk$set(fig.width=12, fig.height=8, out.width = '70%', fig.align = "center")
-  knitr::opts_chunk$set(out.width = '70%', fig.align = "center")
-  options(width = 90)
+  knitr::opts_chunk$set(fig.height = 6, fig.width = 8, out.width = '100%', fig.align = "center")
+  options(width = 100)
 ```
 
 ```{css, echo=FALSE}
@@ -28,288 +28,454 @@ background-color: #e6ffe6;
 }
 ```
 
-```{r}
-rm(list=ls())
-#library(magick)
-#library(imager)
-library(EBImage)
 
-benign_files <- list.files("542/benign/")
-malignant_files <- list.files("542/malignant/")
-resize_w <- 100
-resize_h <- 100
-num_channels <- 3
-number_of_files <- 150
-
-benign_mat <- matrix(NA,nrow=number_of_files,ncol=resize_w*resize_h*num_channels)
-malignant_mat <- matrix(NA,nrow=number_of_files,ncol=resize_w*resize_h*num_channels)
-count <- 1
-for (i in benign_files){
-  file_open <- paste("542/benign/",i,sep="")
-  img <- readImage(file_open)
-  img1 <- resize(img,resize_w,resize_h)
-  mat_img <- img1@.Data
-  vec_img <- as.vector(mat_img)
-  benign_mat[count,] <- vec_img
-  count <- count+1
-}
-
-count <- 1
-for (i in malignant_files){
-  file_open <- paste("542/malignant/",i,sep="")
-  img <- readImage(file_open)
-  img1 <- resize(img,resize_w,resize_h)
-  mat_img <- img1@.Data
-  vec_img <- as.vector(mat_img)
-  malignant_mat[count,] <- vec_img
-  count <- count+1
-}
-
+```{r include = FALSE}
+  mypackages = c("knitr", "kableExtra", "grid", "gridExtra", "EBImage", "class", "randomForest", "caret", "e1071", "doMC", "factoextra", "glmnet")
+  tmp = setdiff(mypackages, rownames(installed.packages()))
+  if (length(tmp) > 0)
+    install.packages(tmp)
 ```
 
-```{r}
-# Create the dataset
-data_cancer <- rbind(benign_mat,malignant_mat)
-data_cancer <- cbind(c(rep(0,150),rep(1,150)),data_cancer)
+```{r include = FALSE}
+  library(knitr)
+  library(kableExtra)
+  library(grid)
+  library(gridExtra)
+  library(EBImage)
+  library(class)
+  library(randomForest)
+  library(caret)
+  library(e1071)
+  library(doMC)
+  library(factoextra)
+  library(glmnet)
 ```
 
-```{r}
-set.seed(1)
-train=sample (1: nrow(data_cancer), nrow(data_cancer)*0.8)
-test <- (-train)
-pca.train <- data_cancer[train,]
-pca.test <- data_cancer[test,]
+### [10 Points, half a page] Project description and summary. This part should summerise your goal, your approach, and your results.
+
+half page description goes here
+
+
+### [5 Points, half a page] Data processing for Question 1. Describe how you process the data so that it can be analyzed to answer question 1.
+
+half page description goes here
+
+
+### [30 Points, within 5 pages] Classification models based on pixels.
+
+
+```{r include = FALSE}
+  rm(list = ls())
+
+  get_image_data <- function(dirPath) {
+    resize_w <- 100
+    resize_h <- 100
+    num_channels <- 3
+    number_of_files <- 150
+    
+    image_mat <- matrix(NA, nrow = number_of_files, ncol = resize_w * resize_h * num_channels)
+    image_files <- list.files(dirPath)
+    
+    count <- 1
+    for (i in image_files) {
+      file_open <- paste(dirPath, i, sep = "")
+      img <- readImage(file_open)
+      img1 <- resize(img, resize_w, resize_h)
+      mat_img <- img1@.Data
+      vec_img <- as.vector(mat_img)
+      image_mat[count, ] <- vec_img
+      count <- count + 1
+    }
+    
+    return(image_mat)
+  }
+
+  benign_mat <- get_image_data("542/benign/")
+  malignant_mat <- get_image_data("542/malignant/")
 ```
 
-```{r}
-pca.Cancer <- prcomp(pca.train[,-1],scale. = FALSE)
+```{r include = FALSE}
+  # Create the dataset
+  data_cancer <- rbind(benign_mat, malignant_mat)
+  data_cancer <- cbind(c(rep(0, 150), rep(1, 150)), data_cancer)
 ```
 
-```{r}
-frac_variance <- (pca.Cancer$sdev^2)/sum(pca.Cancer$sdev^2)
-plot(cumsum(frac_variance), xlab = "Principal Component",
-              ylab = "Cumulative Proportion of Variance Explained",
-              type = "b")
-```
-```{r}
-#I chose first 50 components
-sum(frac_variance[1:100])
-```
-```{r}
-train.data <- data.frame(y = pca.train[,1], pca.Cancer$x)
-train.data <- train.data[,1:101]
-test.data <- predict(pca.Cancer, newdata = pca.test[,-1])
-test.data <- test.data[,1:100]
+
+```{r include = FALSE}
+  # Split train test 70/30 with all data
+  set.seed(12)
+  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
+  train.data <- data_cancer[train,]
+  test.data <- data_cancer[-train,]
 ```
 
-```{r}
-library(randomForest)
-set.seed(1)
-num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
-num_nodes <- c(1,5,10,20,50) 
-all_data_x <- rbind(test.data,train.data[,-1])
-all_data_y <- c(pca.test[,1],train.data[,1])
-best_i <- 1;
-best_j <- 1;
-best_all_error <- 100
-for(i in num_trees){
-  for(j in num_nodes){
-    rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=i, nodesize = j)
-    temp <- cbind(as.numeric(as.character(rfModel$predicted)),(train.data$y))
-    yhat.test = predict(rfModel, test.data)
-    training_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(train.data)
-    temp <- cbind(as.numeric(as.character(yhat.test)),(pca.test[,1]))
-    test_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(test.data)
-    yhat.all <- predict(rfModel,all_data_x)
-    temp <- cbind(as.numeric(as.character(yhat.all)),as.numeric(all_data_y))
-    all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
-    #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
-    if(all_error<best_all_error){
-      best_i <- i
-      best_j <- j
-      best_all_error <- all_error
-      best_rfModel <- rfModel
+```{r include = FALSE, results = "hide"}
+  # knn
+
+  # default choice of k normally by sqrt of number of data
+  # which gives value of 15 so choosing nearby values
+  k = sqrt(dim(train.data)[1])
+  
+  k_values <- c(1, 5, 10, 13,  15, 16, 20, 25)
+  best_k  <- 1;
+  best_accuracy <- 0;
+
+  for(k in k_values) {
+    knn_result <- knn(train=train.data[, -1], test=test.data[, -1], cl=train.data[, 1], k=k)
+    accuracy = 100 * mean(test.data[, 1] == knn_result)
+    cat("k:",k,"Accuracy:",accuracy,"\n")
+
+    if(accuracy > best_accuracy){
+      best_k <- k
+      best_accuracy <- accuracy
     }
   }
-}
+  results = data.frame("K" = best_k, "accuracy" = best_accuracy)
+```
+
+```{r}  
+  kable(results, caption = "KNN")
+```
+
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  #plot(test.data[ ,-1], col=ifelse(==1, "darkorange", "deepskyblue"), pch = 19, cex = 3, axes = FALSE, xlim= c(0, 1), ylim = c(0, 1))
 ```
 
 
 ```{r}
-library(caret)
-#best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j)
-yhat.all <- predict(best_rfModel,all_data_x)
-temp <- cbind(as.numeric(as.character(yhat.all)),(all_data_y))
-all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
-confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+# use parallel for performace 
+  registerDoMC(cores = 4)
+  cv_glmnet_model <- cv.glmnet(train.data[, -1], train.data[, 1], parallel = TRUE, alpha=1, family="binomial")
 ```
 
-```{r}
-library("e1071")
-tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
-best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
-summary(best_svm)
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}  
+  plot(cv_glmnet_model)
 ```
-```{r}
-all_data_x <- rbind(test.data,train.data[,-1])
-all_data_y <- c(pca.test[,1],train.data[,1])
-svmPred <- predict(best_svm, all_data_x )
-library(caret)
-confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
-#save.image(file="Q1.RData")
-```
-Q2
+
 
 ```{r}
-rm(list=ls())
-library(EBImage)
-extract_features <- function(img_in){
-  #img_in <- img_b
-  resize_w <- 400
-  resize_h <- 400
-  img_resize <- resize(img_in,resize_w,resize_h)
-  #apply contrant enhancement and gamma correction - Not sure if this is needed. It didn't help 
-  #img_en <- (img_in * 2) ^ 0.5
+  best_lambda = cv_glmnet_model$lambda.1se
+  # training with best lambda selected from the cv
+  train_glmnet_model <- glmnet(train.data[, -1], train.data[, 1], lambda = best_lambda, alpha=1, family="binomial")
   
-  img_gray <- img_resize
-  colorMode(img_gray) = Grayscale
+  summary(train_glmnet_model)
   
-  #to remove hairs and what looks like marks on microscope
+
+  pred <- predict(train_glmnet_model, s = best_lambda, newx = test.data[, -1], type = "class")
+  accuracy = mean(test.data[, 1] == pred)
+  
+  results = data.frame("Best lambda" = best_lambda, "Accuracy" = accuracy)
+```  
+
+
+```{r} 
+  kable(results, caption = "Lasso Regression Results")
+```
+
+
+```{r include = FALSE}
+  #PCA 
+  set.seed(1)
+  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.8)
+  test <- (-train)
+  pca.train <- data_cancer[train,]
+  pca.test <- data_cancer[test,]
+```
+
+```{r include = FALSE}
+  pca.Cancer <- prcomp(pca.train[, -1], scale. = FALSE)
+```
+
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  frac_variance <- (pca.Cancer$sdev ^ 2) / sum(pca.Cancer$sdev ^ 2)
+  plot(
+    cumsum(frac_variance),
+    xlab = "Principal Component",
+    ylab = "Cumulative Proportion of Variance Explained",
+    type = "b"
+  )
+```
+
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  screeplot(pca.Cancer, type = "l", npcs = 30, main = "Screeplot of the first 30 PCs")
+```
+
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  plot(frac_variance[0:30], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
+```
+
+```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  #Reduce 30000 to ~30 based on both graphs. We notice is that the first 6 components has an Eigenvalue >1 and explains almost 90% of variance
+  
+  fviz_pca_ind(
+    pca.Cancer,
+    geom.ind = "point",
+    pointshape = 21,
+    pointsize = 2,
+    fill.ind = pca.train[, 1],
+    col.ind = "black",
+    label = "var",
+    
+    legend.title = "Diagnosis"
+  ) +
+    ggtitle("2D PCA-plot from 30 feature dataset") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r include = FALSE}
+  #I chose first 30 components
+  sum(frac_variance[1:100])
+```
+
+```{r include = FALSE}
+  train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
+  train.data <- train.data[, 1:101]
+  test.data <- predict(pca.Cancer, newdata = pca.test[, -1])
+  test.data <- test.data[, 1:100]
+```
+
+```{r include = FALSE, results = "hide"}
+  set.seed(1)
+  num_trees <- c(1, 4, 10, 25, 50, 100, 200, 500, 1000, 1250, 1500, 2000, 5000, 10000)
+  num_nodes <- c(1, 5, 10, 20, 50)
+  all_data_x <- rbind(test.data, train.data[, -1])
+  all_data_y <- c(pca.test[, 1], train.data[, 1])
+  best_i <- 1
+  best_j <- 1
+  best_all_error <- 100
+  
+  for(i in num_trees) {
+    for (j in num_nodes) {
+      rfModel = randomForest(
+        formula = as.factor(y) ~ .,
+        data = train.data,
+        importance = T,
+        ntree = i,
+        nodesize = j
+      )
+      temp <- cbind(as.numeric(as.character(rfModel$predicted)), (train.data$y))
+      yhat.test = predict(rfModel, test.data)
+      training_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
+      temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
+      test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
+      yhat.all <- predict(rfModel, all_data_x)
+      temp <- cbind(as.numeric(as.character(yhat.all)), as.numeric(all_data_y))
+      all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+      #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
+      if (all_error < best_all_error) {
+        best_i <- i
+        best_j <- j
+        best_all_error <- all_error
+        best_rfModel <- rfModel
+      }
+    }
+  }
+```
+
+
+```{r include = FALSE}
+  yhat.all <- predict(best_rfModel, all_data_x)
+  temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
+  all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+  confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+```
+
+```{r include = FALSE}
+  tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
+  best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
+  summary(best_svm)
+```
+
+```{r include = FALSE}
+  all_data_x <- rbind(test.data,train.data[,-1])
+  all_data_y <- c(pca.test[,1],train.data[,1])
+  svmPred <- predict(best_svm, all_data_x )
+  confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+```
+
+### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
+
+1 page description goes here
+
+
+### [10 Points, 1 page] Feature engineering. Motivated by what you have read (or your understanding), process the data in a reasonable way such that the new variables are more intuitive to your collaborator/clinicians. You need to describe clearly what is your data processing criteria and how your variables are calculated.
+
+1 page description goes here
+
+
+### [20 Points, 2 page] Classification models based on new features. Fit two different classification models to identify malignant moles. You can either use the ones from Question 1 or use some new models if you believe they may perform better on the new features. Same requirements of Question 1 apply to this part. Besides, you should focus more on variable selection and interpretation.
+
+```{r include = FALSE}
+  rm(list = ls())
+  extract_features <- function(img_in) {
+    #img_in <- img_b
+    resize_w <- 400
+    resize_h <- 400
+    img_resize <- resize(img_in, resize_w, resize_h)
+    #apply contrant enhancement and gamma correction - Not sure if this is needed. It didn't help
+    #img_en <- (img_in * 2) ^ 0.5
+    
+    img_gray <- img_resize
+    colorMode(img_gray) = Grayscale
+    
+    #to remove hairs and what looks like marks on microscope
     #median filter - This did not help at all
     #img_median = medianFilter(img_gray, 1)
-  
+    
     #Low Pass filter
-    w = makeBrush(size = 31, shape = 'gaussian', sigma = 5)
+    w = makeBrush(size = 31,
+                  shape = 'gaussian',
+                  sigma = 5)
     img_lp = filter2(img_gray, w)
-  
-  img_in_th <- img_lp
-  threshold <- otsu(img_in_th)
-  #cat(threshold,"\n")
-  img_th = combine( mapply(function(frame, th) frame > th, getFrames(img_in_th), threshold, SIMPLIFY=FALSE) )
-  
-  img_th_val <- img_th
-  img_th_val[which(img_th)==TRUE] <- 1
-  img_th_val[which(img_th)==TRUE] <- 0
-  fhi = matrix(1, nrow = 3, ncol = 3)
-  fhi[2, 2] = -8
-  img_fhi = filter2(img_th_val, fhi)
-  img_fhi_col <- filter2(img_gray, fhi)
-  #display(img_fhi)
-  #display(combine(img_gray,img_th_val,img_fhi, img_fhi_col), all=TRUE)
-  
-  #Features based on preprocessing
-  #area_f <- length(which(img_th_val==1))
-  #perimeter_f <- length(which(img_fhi==1))
-  area_f <- c(0,0,0)
-  perimeter_f <- c(0,0,0)
-  rgb_f <- c(0,0,0)
-  img_col_thresh <- img_resize * img_th_val
-  for(i in 1:3){
-    area_f[i] <- length(which(img_th_val[,,i]==1))/(resize_h*resize_w)
-    perimeter_f[i] <- length(which(img_fhi[,,i]==1))/(resize_h*resize_w)
-    rgb_f[i] <- sum(img_col_thresh[which(img_th_val[,,i]==1)])/(resize_h*resize_w)
+    
+    img_in_th <- img_lp
+    threshold <- otsu(img_in_th)
+    #cat(threshold,"\n")
+    img_th = combine(mapply(
+      function(frame, th)
+        frame > th,
+      getFrames(img_in_th),
+      threshold,
+      SIMPLIFY = FALSE
+    ))
+    
+    img_th_val <- img_th
+    img_th_val[which(img_th) == TRUE] <- 1
+    img_th_val[which(img_th) == TRUE] <- 0
+    fhi = matrix(1, nrow = 3, ncol = 3)
+    fhi[2, 2] = -8
+    img_fhi = filter2(img_th_val, fhi)
+    img_fhi_col <- filter2(img_gray, fhi)
+    #display(img_fhi)
+    #display(combine(img_gray,img_th_val,img_fhi, img_fhi_col), all=TRUE)
+    
+    #Features based on preprocessing
+    #area_f <- length(which(img_th_val==1))
+    #perimeter_f <- length(which(img_fhi==1))
+    area_f <- c(0, 0, 0)
+    perimeter_f <- c(0, 0, 0)
+    rgb_f <- c(0, 0, 0)
+    img_col_thresh <- img_resize * img_th_val
+    for (i in 1:3) {
+      area_f[i] <- length(which(img_th_val[, , i] == 1)) / (resize_h * resize_w)
+      perimeter_f[i] <-
+        length(which(img_fhi[, , i] == 1)) / (resize_h * resize_w)
+      rgb_f[i] <-
+        sum(img_col_thresh[which(img_th_val[, , i] == 1)]) / (resize_h * resize_w)
+    }
+    reg_f <- area_f / perimeter_f
+    
+    return(c(area_f, perimeter_f, rgb_f))
   }
-  reg_f <- area_f / perimeter_f
+```
+
+```{r include = FALSE}
+  benign_files <- list.files("542/benign/")
+  malignant_files <- list.files("542/malignant/")
+  number_of_files <- 150
+  benign_mat <- matrix(NA, nrow = number_of_files, ncol = 9)
+  malignant_mat <- matrix(NA, nrow = number_of_files, ncol = 9)
+  count <- 1
+  for (i in benign_files) {
+    file_open <- paste("542/benign/", i, sep = "")
+    img <- readImage(file_open)
+    benign_mat[count, ] <- extract_features(img)
+    count <- count + 1
+  }
   
-  return(c(area_f,perimeter_f,rgb_f))
-}
-```
-
-```{r}
-benign_files <- list.files("542/benign/")
-malignant_files <- list.files("542/malignant/")
-number_of_files <- 150
-benign_mat <- matrix(NA,nrow=number_of_files,ncol=9)
-malignant_mat <- matrix(NA,nrow=number_of_files,ncol=9)
-count <- 1
-for (i in benign_files){
-  file_open <- paste("542/benign/",i,sep="")
-  img <- readImage(file_open)
-  benign_mat[count,] <- extract_features(img)
-  count <- count+1
-}
-
-count <- 1
-for (i in malignant_files){
-  file_open <- paste("542/malignant/",i,sep="")
-  img <- readImage(file_open)
-  malignant_mat[count,] <- extract_features(img)
-  count <- count+1
-}
+  count <- 1
+  for (i in malignant_files) {
+    file_open <- paste("542/malignant/", i, sep = "")
+    img <- readImage(file_open)
+    malignant_mat[count, ] <- extract_features(img)
+    count <- count + 1
+  }
 
 ```
 
-```{r}
-# Create the dataset
-data_cancer <- rbind(benign_mat,malignant_mat)
-data_cancer <- cbind(c(rep(0,150),rep(1,150)),data_cancer,data_cancer[,1:3]/data_cancer[,4:6])
-colnames(data_cancer) <- c("y","area_r","area_g","area_b","perimeter_r","permiter_g","perimeter_b","color_r","color_g","color_b","reg_r","reg_g","reg_b")
-data_cancer[which(is.infinite(data_cancer)==TRUE)] <- 0
-set.seed(1)
-train=sample (1: nrow(data_cancer), nrow(data_cancer)*0.8)
-test <- (-train)
-train.data <- data_cancer[train,]
-test.data <- data_cancer[test,]
+```{r include = FALSE}
+  # Create the dataset
+  data_cancer <- rbind(benign_mat, malignant_mat)
+  data_cancer <-
+    cbind(c(rep(0, 150), rep(1, 150)), data_cancer, data_cancer[, 1:3] / data_cancer[, 4:6])
+  colnames(data_cancer) <-
+    c(
+      "y",
+      "area_r",
+      "area_g",
+      "area_b",
+      "perimeter_r",
+      "permiter_g",
+      "perimeter_b",
+      "color_r",
+      "color_g",
+      "color_b",
+      "reg_r",
+      "reg_g",
+      "reg_b"
+    )
+  data_cancer[which(is.infinite(data_cancer) == TRUE)] <- 0
+  set.seed(1)
+  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.8)
+  test <- (-train)
+  train.data <- data_cancer[train, ]
+  test.data <- data_cancer[test, ]
 ```
 
-```{r}
-library(randomForest)
-library(randomForest)
-set.seed(1)
-num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
-num_nodes <- c(1,5,10,20,50) 
-all_data_x <- rbind(test.data[,-1],train.data[,-1])
-all_data_y <- c(test.data[,1],train.data[,1])
-best_i <- 1;
-best_j <- 1;
-best_all_error <- 100
-for(i in num_trees){
-  for(j in num_nodes){
-    rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=i, nodesize = j)
-    temp <- cbind(as.numeric(as.character(rfModel$predicted)),(train.data[,1]))
-    yhat.test = predict(rfModel, test.data)
-    training_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(train.data)
-    temp <- cbind(as.numeric(as.character(yhat.test)),(test.data[,1]))
-    test_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(test.data)
-    yhat.all <- predict(rfModel,all_data_x)
-    temp <- cbind(as.numeric(as.character(yhat.all)),as.numeric(all_data_y))
-    all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
-    #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
-    if(all_error<best_all_error){
-      best_i <- i
-      best_j <- j
-      best_all_error <- all_error
-      best_rfModel <- rfModel
+```{r include = FALSE}
+  set.seed(1)
+  num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_nodes <- c(1,5,10,20,50) 
+  all_data_x <- rbind(test.data[,-1],train.data[,-1])
+  all_data_y <- c(test.data[,1],train.data[,1])
+  best_i <- 1;
+  best_j <- 1;
+  best_all_error <- 100
+  for(i in num_trees){
+    for(j in num_nodes){
+      rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=i, nodesize = j)
+      temp <- cbind(as.numeric(as.character(rfModel$predicted)),(train.data[,1]))
+      yhat.test = predict(rfModel, test.data)
+      training_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(train.data)
+      temp <- cbind(as.numeric(as.character(yhat.test)),(test.data[,1]))
+      test_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(test.data)
+      yhat.all <- predict(rfModel,all_data_x)
+      temp <- cbind(as.numeric(as.character(yhat.all)),as.numeric(all_data_y))
+      all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
+      #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
+      if(all_error<best_all_error){
+        best_i <- i
+        best_j <- j
+        best_all_error <- all_error
+        best_rfModel <- rfModel
+      }
     }
   }
-}
 ```
 
 
 
-```{r}
-library(caret)
-#best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j)
-yhat.all <- predict(best_rfModel,all_data_x)
-temp <- cbind(as.numeric(as.character(yhat.all)),(all_data_y))
-all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
-confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+```{r include = FALSE}
+  #best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j)
+  yhat.all <- predict(best_rfModel, all_data_x)
+  temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
+  all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+  confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
 ```
 
-```{r}
-varImpPlot(best_rfModel)
+```{r include = FALSE}
+  varImpPlot(best_rfModel)
 ```
 
-```{r}
-library("e1071")
-tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
-best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
-summary(best_svm)
+```{r include = FALSE}
+  tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
+  best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
+  summary(best_svm)
 ```
 
-```{r}
-svmPred <- predict(best_svm, all_data_x)
-library(caret)
-confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+```{r include = FALSE}
+  svmPred <- predict(best_svm, all_data_x)
+  confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
 ```
 
