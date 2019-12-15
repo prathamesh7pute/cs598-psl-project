@@ -239,7 +239,7 @@ PCA is an excellent choice when it comes to images because inherently due to its
 
 ```{r include = FALSE, results = "hide"}
   set.seed(1)
-  num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_trees <- c(500)#c(1,10,50,100,200,500,1000,1250,2000,5000)
   num_nodes <- c(1,5,10,20,50) 
   all_data_x <- rbind(test.data, train.data[, -1])
   all_data_y <- c(pca.test[, 1], train.data[, 1])
@@ -275,7 +275,12 @@ PCA is an excellent choice when it comes to images because inherently due to its
   }
 ```
 
-We run a random forest through a grid search through of number of trees (1 to 10000) and nodesize(1 to 50). We find that our best model is with 1250 trees and a nodesize of 5. Our accuracy on the entire set is 93.33%
+```{r}
+#varImpPlot(best_rfModel)
+plot(best_rfModel)
+```
+
+We run a random forest through a grid search through of number of trees (1 to 5000) and nodesize(1 to 50). We find that our best model is with 500 trees and a nodesize of 20. Our accuracy on the entire set is 93.33%
 ```{r include = TRUE}
   yhat.all <- predict(best_rfModel, all_data_x)
   temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
@@ -453,7 +458,7 @@ We generate 5 features for each of the channels:
 
 ```{r include = FALSE}
   set.seed(1)
-  num_trees <- c(1,4,10,25,50,100,200,500,1000,1250,1500,2000,5000,10000)
+  num_trees <- c(1,10,50,100,200,500,1000,1250,1500,2000)
   num_nodes <- c(1,5,10,20,50) 
   all_data_x <- rbind(test.data[,-1],train.data[,-1])
   all_data_y <- c(test.data[,1],train.data[,1])
@@ -472,7 +477,7 @@ We generate 5 features for each of the channels:
       temp <- cbind(as.numeric(as.character(yhat.all)),as.numeric(all_data_y))
       all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
       #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
-      if(all_error<best_all_error){
+      if(all_error < best_all_error){
         best_i <- i
         best_j <- j
         best_all_error <- all_error
@@ -482,7 +487,7 @@ We generate 5 features for each of the channels:
   }
 ```
 
-As with question1, we run through a random forest model with a grid search on number of tress and nodesize. The best model was with 500 trees and 5 nodesize with an accuracy of 92%. 
+As with question1, we run through a random forest model with a grid search on number of tress and nodesize. The best model was with 100 trees and 5 nodesize with an accuracy of 92%. 
 
 ```{r include = TRUE}
   #best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j)
