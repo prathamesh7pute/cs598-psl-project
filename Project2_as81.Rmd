@@ -289,13 +289,22 @@ We run a random forest through a grid search through of number of trees (1 to 50
   kable(temp$table, caption="RandomForest Confusion Matrix")
 ```
 
-```{r include = FALSE}
+SVM is very sensitive to the choice of parameters. SVM has some parameters that have to be tuned to get better performance. It is very sensitive to the choice of parameters. Used tune.svm() to try out different parameters. It takes in different values of gamma, cost and returns the one with minimum classification error for the 10-fold cross validation. Used the best gamma and cost values to train the best_svm model. 
+
+```{r include = TRUE}
   tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
   best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
   summary(best_svm)
 ```
 
-```{r include = FALSE}
+SVM for Training data : First two Principle Components
+
+```{r include = TRUE}
+plot(best_svm, train.data, PC1 ~ PC2)
+```
+
+
+```{r include = TRUE}
   all_data_x <- rbind(test.data, train.data[, -1])
   all_data_y <- c(pca.test[, 1], train.data[, 1])
   svmPred <- predict(best_svm, all_data_x)
