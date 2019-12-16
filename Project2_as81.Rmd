@@ -62,11 +62,11 @@ background-color: #e6ffe6;
 
 #### Goal
 
-Goal of this project is to identify malignent moles from benign moles. Provided image dataset has 150 benign and 150 malignent moles with varying resolutions. Some of the images has moles with hairs, markings on the microscope for measurement.
+Goal of this project is to identify malignent moles from benign moles. Provided image dataset has 150 benign and 150 malignent moles with varying resolutions. Some of the images have moles with hairs, markings on the microscope for measurement. This data has to be processed and classified to identify malignent moles from the benign ones.
 
 #### Approach
 
-For Q1 we resized the images to 100x100 resolution and used that all pixel information to perform classification. 
+Approach for Q1 - we resized the images to 100x100 resolution and used that all pixel information to perform classification. 
 
 For the first model we choose Lasso with best lambda which provided minimum misclassification error by doing 10 fold cross-validation and using that model for predicting the results. 
 
@@ -74,13 +74,13 @@ For the second model we choose to do the PCA as it's an excellent choice when it
 
 For the third model we use PCA features for training Random Forest model. We tried different values of no. of trees and no. of nodes to get the best parameters for the random forest model.
 
-For Q2, as a starting point, we began from the directions provided by the American Academy of Dermatology association, which targeted the ABCD of melanoma detection. @aad [Link here]. This provided us the intuition needed to generate the features. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. We extracted features which correlate to the attributes like Area, Perimeter, Circularity index, Color in the segmented region. We used Ridge Regression and Random Forest Model on this transformed dataset to see whether it improved the accuracy.
+Approach for Q2 - as a starting point, we began from the directions provided by the American Academy of Dermatology association, which targeted the ABCD of melanoma detection. @aad [Link here]. This provided us the intuition needed to generate the features. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. We extracted features which correlate to the attributes like Area, Perimeter, Circularity index, Color in the segmented region. We used Ridge Regression and Random Forest Model on this transformed dataset to see whether it improved the accuracy.
 
 #### Results
 
 ```{r results, echo=FALSE, results='asis'}
-  q1_results = data.frame("Model" = c("Lasso", "SVM", "Random Forest"), "Accuracy" = c("72.00%", "70.00%", "92.00%"))
-  q2_results = data.frame("Model" = c("Lasso", "Random Forest", ""), "Accuracy" = c("74.00%", "92.00%", ""))
+  q1_results = data.frame("Model" = c("Lasso", "SVM", "Random Forest"), "Accuracy" = c("64.00%", "75.00%", "93.00%"))
+  q2_results = data.frame("Model" = c("Lasso", "Random Forest", ""), "Accuracy" = c("74.00%", "91.00%", ""))
   
   t1 <- kable(q1_results, format = "latex", booktabs = T)
   t2 <- kable(q2_results, format = "latex", booktabs = T)
@@ -100,13 +100,13 @@ For Q2, as a starting point, we began from the directions provided by the Americ
     ))  
 ```
 
-Write here some text analysing result - we have whole page for the point 1 - data processing starts on page 2 as per instructions provided
+We can see an improvement in classification accuracy for Lasso Model after we performed the transformation mentioned in second approach. We chose Lasso Model for both approaches as the model interpretability is high.
 
 ### [5 Points, half a page] Data processing for Question 1.
 
-We have used the EBImage package for processing and getting image data. We have crated the 2 matrix of 150x30000 each for benign and malignant files. We resize each image to 100x100 pixels resized the images to 100 x 100 resolution and then used this resize image data as vector. As this data consits of 3 channels we got maxis with 100x100x3 cols and 150 rows. We used all the pixel information for the lasso model.
+We have used the EBImage package for processing and getting image data. We have crated the 2 matrix of 150x30000 each for benign and malignant files. We resize each image to 100x100 pixels and then used this resize image data as vector. As this data consists of 3 channels we got matrices with 100x100x3 cols and 150 rows. We used all the pixel information for the lasso model.
 
-We then choose to do the PCA as PCA is an excellent choice when it comes to images because inherently due to its natur, there is spatial corellation among pixel. Instead of using all the pixes, we can signifcantly reduce the number of features which encompass most of the variation. After plotting some information as shown below we choose 27 components which accounts for over 90% of the variation. We split our data in 70/30 train and test data split and perormed SVM and RF on it.
+We then choose to do the PCA as PCA is an excellent choice when it comes to images because inherently due to its nature, there is spatial corellation among pixel. Instead of using all the pixels, we can signifcantly reduce the number of features which encompass most of the variation. After plotting some information as shown below we choose 27 components which accounts for over 90% of the variation. We split our data in 70/30 train and test data split and perormed SVM and RF on it.
 
 ```{r include = FALSE}
   get_image_data <- function(dirPath) {
@@ -187,7 +187,7 @@ We then choose to do the PCA as PCA is an excellent choice when it comes to imag
 
 ### Classification Model 1. Lasso
 
-For performing classification with the lasso we are selecting the family as binomial. We are using all the pixels which we got after resizing the image to 100x100 and by using 3 channels. As we have split the data in 70/30 ratio. The xtrain data is the 210x30000 matrix and ytrain is corrsponding 210 response. xtest is 90x30000 metrix and ytest is corrsponding 90 responses.
+For performing classification with the lasso we are selecting the family as binomial. We are using all the pixels which we got after resizing the image to 100x100 and we are using 3 channels. As we have split the data in 70/30 ratio, we got xtrain data as 210x30000 matrix and ytrain as  210 corresponding responses. xtest is 90x30000 matrix and ytest is corrsponding 90 responses.
 
 ```{r results = "hide"}
   # use parallel for performace
@@ -211,7 +211,7 @@ For performing classification with the lasso we are selecting the family as bino
   plot(cv_glmnet_model)
 ```
 
-After performing the 10 fold validation and selecting the best lambda we retrained the model with the selected best lambda and family binomial and type.measure class and useed that model for predicting class on the test data. Accuracy we got is around 68%
+After performing the 10 fold validation and selecting the best lambda we retrained the model with the selected best lambda and family binomial and type.measure class and used this model for predicting class on the test data. We got around 68% accuracy for the test data.
 
 ```{r echo=FALSE, results='asis'}
   t1 <- kable(lasso_results, format = "latex", booktabs = T)
@@ -242,7 +242,7 @@ After performing the 10 fold validation and selecting the best lambda we retrain
 
 ### Classification Model 2. SVM with PCA
 
-When we select only few features and build a linear SVM, we noticed an 80.47% training accuracy and a\ 65% validation set acccuracy. After increasing the number of features to 50, 70, 90, and 100, the training accuracy increased to 98% and flattened. However the test set accuracy dropped from 65% to 50%. Based the graphs and these scores, we retained the 27 features PCA as the final choice.
+When we select only few features from the original dataset and build a linear SVM, we noticed an 80.47% training accuracy and a 65% validation set acccuracy. After increasing the number of features to 50, 70, 90, and 100, the training accuracy increased to 98% and flattened. However the test set accuracy dropped from 65% to 50%. We performed PCA and based on the graphs and the scores, we retained the 27 features PCA as the final choice. 
 
 ```{r include = TRUE}
   set.seed(1)
@@ -256,16 +256,22 @@ When we select only few features and build a linear SVM, we noticed an 80.47% tr
       gamma = c(0.1, 0.25, 0.5, 0.75, 1, 2)
     )
   )
+```
+
+We noticed SVM is very sensitive to the choice of parameters. We trained a linear SVM model with the best parameters we got from tuning, gamma = 0.1 and cost = 1. We are also performing 10-fold cross validation to assess the quality of the model.
+
+```{r}
   best_svm <- svm(
     as.factor(y) ~ .,
     data = train.data,
     kernel = "linear",
     cost = tuned_svm$best.parameters$cost,
-    gamma = tuned_svm$best.parameters$gamma
+    gamma = tuned_svm$best.parameters$gamma,
+    cross = 10
   )
 ```
 
-We noticed SVM is very sensitive to the choice of parameters. SVM has some parameters that have to be tuned to get better performance. It is very sensitive to the choice of parameters. Used tune.svm() to try out different parameters. It takes in different values of gamma, cost and returns the one with minimum classification error for the 10-fold cross validation. Used the best gamma and cost values to train the best_svm model.
+We tried different hyperplanes to separate the dataset. We noticed that a simple linear split is consistently performing well. 133 support vectors have been identified by the best svm model.
 
 SVM for Training data : First two Principle Components
 ```{r fig.height = 4, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
@@ -273,17 +279,22 @@ SVM for Training data : First two Principle Components
 ```
 
 ```{r include = FALSE}
-  all_data_x <- rbind(test.data, train.data[, -1])
-  all_data_y <- c(pca.test[, 1], train.data[, 1])
-  svmPred <- predict(best_svm, all_data_x)
-  accuracy = mean(all_data_y == svmPred) * 100
-  svm_results = data.frame("Accuracy" = as.numeric(accuracy,3))
-  svm_confusionMatrix <- confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+  svmPredTrain <- predict(best_svm, train.data)
+  accuracy = mean(train.data[, 1] == svmPredTrain) * 100
+  svm_results = data.frame("Train Data Accuracy" = as.numeric(accuracy,3))
+  svm_train_confusionMatrix <- confusionMatrix(as.factor(svmPredTrain), as.factor(train.data[, 1]))
+```
+
+```{r include = FALSE}
+  svmPred <- predict(best_svm, test.data)
+  accuracy = mean(pca.test[, 1] == svmPred) * 100
+  svm_results = data.frame("Test Data Accuracy" = as.numeric(accuracy,3))
+  svm_test_confusionMatrix <- confusionMatrix(as.factor(svmPred), as.factor(pca.test[, 1]))
 ```
 
 ```{r echo=FALSE, results='asis'}
   t1 <- kable(svm_results, format = "latex", booktabs = T)
-  t2 <- kable(svm_confusionMatrix$table, format = "latex", booktabs = T)
+  t2 <- kable(svm_test_confusionMatrix$table, format = "latex", booktabs = T)
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
@@ -300,9 +311,11 @@ SVM for Training data : First two Principle Components
     ))  
 ```
 
-comment on the result
+Linear SVM with 133 support vectors, trained over 27 Principal Components performs consistently with training accuracy of 76% and testing accuracy of 71%.
 
 ### Classification Model 3. Random Forest with PCA
+
+We used the dataset with 27 Principal Components to train a tree-based classification model. Random Forest is a popular decision tree model as it performs well for high-dimensional data and bins the outliers. Choice of no. of trees and no. of nodes is very important, so we did a grid search.
 
 ```{r results = "hide"}
    set.seed(1)
@@ -342,11 +355,14 @@ comment on the result
 ```
 
 ```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-   varImpPlot(best_rfModel)
+   varImpPlot(best_rfModel, main="Variable Importance Plot")
 ```
 
+This plot helps us in understanding the important variables chosen by the best random forest model. MeanDecreaseAccuracy helps us in understanding the importance of a variable's inclusion in reducing the classification error. MeanDecreaseGini helps us in understanding the relevance of variables in classification using node impurity (Gini). 
+
+
 ```{r fig.height = 3, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-   plot(best_rfModel)
+   plot(best_rfModel, main = "Best Random Forest Model", legend = c("bottomright", pch=1))
 ```
 
 
