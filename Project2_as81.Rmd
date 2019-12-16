@@ -139,14 +139,15 @@ We then choose to do the PCA as PCA is an excellent choice when it comes to imag
   ytrain = train.data[, 1]
   xtest = test.data[, -1]
   ytest = test.data[, 1]
-
+  
   #PCA
   set.seed(1)
   train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
   test <- (-train)
   pca.train <- data_cancer[train,]
   pca.test <- data_cancer[test,]
-
+  colnames(pca.train) <- c("y",seq(1,30000))
+  colnames(pca.test) <- colnames(pca.train)
   pca.Cancer <- prcomp(as.data.frame(pca.train[, -1]), scale. = FALSE)
 
   #frac_variance <- (pca.Cancer$sdev ^ 2) / sum(pca.Cancer$sdev ^ 2)
@@ -207,84 +208,98 @@ After performing the 10 fold validation and selecting the best lambda we retrain
     kable_styling(latex_options = c("hold_position"))
 ```
 
+```{r include = FALSE}
+  train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
+  train.data <- train.data[, 1:28]
+  test.data <- predict(pca.Cancer, pca.test[, -1])
+  test.data <- test.data[, 1:27]
+```
 
 ### Classification Model 2. SVM
 
-```{r include = FALSE}
-  # train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
-  # train.data <- train.data[, 1:28]
-  # test.data <- predict(pca.Cancer, newdata = pca.test[, -1])
-  # test.data <- test.data[, 1:27]
+SVM is very sensitive to the choice of parameters. SVM has some parameters that have to be tuned to get better performance. It is very sensitive to the choice of parameters. Used tune.svm() to try out different parameters. It takes in different values of gamma, cost and returns the one with minimum classification error for the 10-fold cross validation. Used the best gamma and cost values to train the best_svm model. 
+```{r include = TRUE}
+  tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
+  best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
+  summary(best_svm)
+```
+SVM for Training data : First two Principle Components
+```{r include = TRUE}
+plot(best_svm, train.data, PC1 ~ PC3)
 ```
 
-```{r include = FALSE}
-  # tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", 
-  #                   range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
-  # best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear", 
-  #                 cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
-  # summary(best_svm)
+Non-linear Kernel SVM :-
+
+```{r}
+  ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
+  summary(ksvm_model)
 ```
 
-```{r include = FALSE}
-  # all_data_x <- rbind(test.data, train.data[, -1])
-  # all_data_y <- c(pca.test[, 1], train.data[, 1])
-  # svmPred <- predict(best_svm, all_data_x)
-  # confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+```{r include = TRUE}
+  all_data_x <- rbind(test.data, train.data[, -1])
+  all_data_y <- c(pca.test[, 1], train.data[, 1])
+  svmPred <- predict(best_svm, all_data_x)
+  confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+  ksvmPred <- predict(ksvm_model, all_data_x)
+  confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
 ```
 
 ### Classification Model 3. Random Forest
 
 ```{r include = FALSE, results = "hide"}
-  # set.seed(1)
-  # num_trees <- c(1,10,50,100,500,1000,1250,2000)
-  # num_nodes <- c(1,5,10)
-  # all_data_x <- rbind(test.data, train.data[, -1])
-  # all_data_y <- c(pca.test[, 1], train.data[, 1])
-  # best_i <- 1
-  # best_j <- 1
-  # best_all_error <- 100
-  # 
-  # for(i in num_trees) {
-  #   for (j in num_nodes) {
-  #     rfModel = randomForest(
-  #       formula = as.factor(y) ~ .,
-  #       data = train.data,
-  #       importance = T,
-  #       ntree = i,
-  #       nodesize = j
-  #     )
-  #     temp <- cbind(as.numeric(as.character(rfModel$predicted)), (train.data$y))
-  #     yhat.test = predict(rfModel, test.data)
-  #     training_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
-  #     temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
-  #     test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
-  #     yhat.all <- predict(rfModel, all_data_x)
-  #     temp <- cbind(as.numeric(as.character(yhat.all)), as.numeric(all_data_y))
-  #     all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-  #     #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
-  #     if (all_error < best_all_error) {
-  #       best_i <- i
-  #       best_j <- j
-  #       best_all_error <- all_error
-  #       best_rfModel <- rfModel
-  #     }
-  #   }
-  # }
+   set.seed(1)
+   num_trees <- c(1,10,50,100,500,1000,1250,2000)
+   num_nodes <- c(1,5,10)
+   all_data_x <- rbind(test.data, train.data[, -1])
+   all_data_y <- c(pca.test[, 1], train.data[, 1])
+   best_i <- 1
+   best_j <- 1
+   best_all_error <- 100
+   
+   for(i in num_trees) {
+     for (j in num_nodes) {
+       rfModel = randomForest(
+         formula = as.factor(y) ~ .,
+         data = train.data,
+         importance = T,
+         ntree = i,
+         nodesize = j
+       )
+       temp <- cbind(as.numeric(as.character(rfModel$predicted)), (train.data$y))
+       yhat.test = predict(rfModel, test.data)
+       training_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
+       temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
+       test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
+       yhat.all <- predict(rfModel, all_data_x)
+       temp <- cbind(as.numeric(as.character(yhat.all)), as.numeric(all_data_y))
+       all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+       #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
+       if (all_error < best_all_error) {
+         best_i <- i
+         best_j <- j
+         best_all_error <- all_error
+         best_rfModel <- rfModel
+       }
+     }
+   }
 ```
 
 ```{r}
-  # varImpPlot(best_rfModel)
-  # plot(best_rfModel)
+   varImpPlot(best_rfModel)
+```
+
+```{r}
+   plot(best_rfModel)
 ```
 
 We run a random forest through a grid search through of number of trees (1 to 5000) and nodesize(1 to 50). We find that our best model is with 500 trees and a nodesize of 20. Our accuracy on the entire set is 93.33%
 
 ```{r include = TRUE}
-  # yhat.all <- predict(best_rfModel, all_data_x)
-  # temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
-  # all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-  # temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
-  # kable(temp$table, caption="RandomForest Confusion Matrix")
+   yhat.all <- predict(best_rfModel, all_data_x)
+   temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
+   all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+   temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+   kable(temp$table, caption="RandomForest Confusion Matrix")
 ```
 
 ### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
