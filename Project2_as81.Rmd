@@ -33,10 +33,10 @@ background-color: #e6ffe6;
 
 ```{r include = FALSE}
   rm(list = ls(all.names = TRUE))
-  mypackages = c("knitr", "kableExtra", "grid", "gridExtra", "EBImage", "class", "randomForest", "caret", "e1071", "doMC", "factoextra", "glmnet")
+  mypackages = c("knitr", "kableExtra", "grid", "gridExtra", "EBImage", "class", "randomForest", "caret", "e1071", "doMC", "factoextra", "glmnet", "kernlib")
   tmp = setdiff(mypackages, rownames(installed.packages()))
   if (length(tmp) > 0)
-    install.packages(tmp)
+    install.packages(tmp, repos = "http://cran.us.r-project.org")
 ```
 
 ```{r include = FALSE}
@@ -52,6 +52,7 @@ background-color: #e6ffe6;
   library(factoextra)
   library(glmnet)
   library(EBImage)
+  library(kernlab)
 ```
 
 ### [10 Points, half a page] Project description and summary. This part should summerise your goal, your approach, and your results.
@@ -303,13 +304,20 @@ SVM for Training data : First two Principle Components
 plot(best_svm, train.data, PC1 ~ PC2)
 ```
 
+Non-linear Kernel SVM :-
+
+```{r}
+  ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
+  summary(ksvm_model)
+```
 
 ```{r include = TRUE}
   all_data_x <- rbind(test.data, train.data[, -1])
   all_data_y <- c(pca.test[, 1], train.data[, 1])
-  svmPred <- predict(best_svm, all_data_x)
-  confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+  ksvmPred <- predict(ksvm_model, all_data_x)
+  confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
 ```
+
 
 ### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
 
