@@ -56,6 +56,7 @@ background-color: #e6ffe6;
   library(glmnet)
   library(EBImage)
   library(tidytext)
+  library(kernlab)
 ```
 
 ### [10 Points, half a page] Project description and summary.
@@ -67,7 +68,9 @@ Goal of this project is to identify malignent moles from benign moles. Provided 
 For Q1 we resized the images to 100x100 resolution and used that all pixel information to perform classification. 
 
 For the first model we choose Lasso with best lambda which provided minimum misclassification error by doing 10 fold cross-validation and using that model for predicting the results. 
+
 For the second model we choose to do the PCA as it's an excellent choice when it comes to images. Using the selected principal components, we trained a SVM model. SVM Model is sensitive to parameters chosen. We used tune.svm() for trying different values of gamma and cost. We picked the gamma and cost which gives minimum classification error. 
+
 For the third model we use PCA features for training Random Forest model. We tried different values of no. of trees and no. of nodes to get the best parameters for the random forest model.
 
 For Q2, as a starting point, we began from the directions provided by the American Academy of Dermatology association, which targeted the ABCD of melanoma detection. @aad [Link here]. This provided us the intuition needed to generate the features. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. We extracted features which correlate to the attributes like Area, Perimeter, Circularity index, Color in the segmented region. We used Ridge Regression and Random Forest Model on this transformed dataset to see whether it improved the accuracy.
@@ -222,27 +225,41 @@ SVM is very sensitive to the choice of parameters. SVM has some parameters that 
 ```{r include = TRUE}
   tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
   best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
+```
+
+```{r include=FALSE}
   summary(best_svm)
 ```
+
 SVM for Training data : First two Principle Components
 ```{r include = TRUE}
 plot(best_svm, train.data, PC1 ~ PC3)
-```
-
-Non-linear Kernel SVM :-
-
-```{r}
-  # ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
-  # summary(ksvm_model)
 ```
 
 ```{r include = TRUE}
   all_data_x <- rbind(test.data, train.data[, -1])
   all_data_y <- c(pca.test[, 1], train.data[, 1])
   svmPred <- predict(best_svm, all_data_x)
-  confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
-  # ksvmPred <- predict(ksvm_model, all_data_x)
-  # confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
+  temp <- confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+  kable(temp$table, caption="Linear SVM Confusion Matrix")
+```
+
+Non-linear Kernel SVM :-
+
+```{r}
+  ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
+  # summary(ksvm_model)
+```
+
+```{r include = TRUE}
+#plot(ksvm_model, train.data, PC1 ~ PC3)
+```
+
+
+```{r include=TRUE}
+  ksvmPred <- predict(ksvm_model, all_data_x)
+  temp <- confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
+  kable(temp$table, caption="RBFDOT NonLinear SVM Confusion Matrix")
 ```
 
 ### Classification Model 3. Random Forest
@@ -306,10 +323,13 @@ We run a random forest through a grid search through of number of trees (1 to 50
 ### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
 
 The American Academy of Dermatology Association (@aad) listes the ABCDE of detecting Melanoma. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. Since in this project statement, are given a series of pictures over a lesion over a period of time, we will not be able to create a specific feature for Evolving. Hence, we concentrate on the remaining.
+
 A great tools for us is EBImage which is package developed by @Pau2010 which provides us very usable functions for image processing tasks. We use various features of this package for our feature engineering.
 @RA2012 provides high level features one could use to help engineer our features. Their main work talks about the different way to quantize irregularities. They use a mix of both coarse and fine grain methods to achieve this.
+
 @SJ2015 Shivangi et al, also talks about a good pipeline to this. Their work diffs in that they introduce quantitative metrics to mark irregulaties in shape. They also take into account the size of the lesion. However to this accurately they must have ensured that the each image is taken from the same distance and focus. We do not have that information regarding our dataset, so we must rely on ration. One of the interesting features proposed in using Circularity Index, it is the ration of (4*pi*Area)/(Perimeter*Perimeter). This is a geat metric becaus this is scale invariant.
 Of course is @SJ2015 and @Pau@2010, they do concentrate a fair amount on preprocessing steps like illumination and segmentation.
+
 
 ### [10 Points, 1 page] Feature engineering. Motivated by what you have read (or your understanding), process the data in a reasonable way such that the new variables are more intuitive to your collaborator/clinicians. You need to describe clearly what is your data processing criteria and how your variables are calculated.
 
@@ -319,6 +339,7 @@ Of course is @SJ2015 and @Pau@2010, they do concentrate a fair amount on preproc
 
 Our pipeline takes an input image and prepares it for feature extraction. Once, we have our features, we then run it through various classifiers to observe the results. All steps in the preprocessing steps are done in 3 planes. We keep results from all these planes, as the classifier should be able to choose from them.
 Preprocessing steps :
+
 1. Resize all images to 400 x400
 2. Convert Color to Grayscale but also preseve the color image.
 3. We run it through a low pass filter to remove hairs and scale markings.
@@ -329,6 +350,7 @@ Preprocessing steps :
 Do notice from the image above that the red channel does not yield very good preprocessing results while the green and blue channels are very successful in isolation the regions.
 
 We generate 5 features for each of the channels:
+
 1. Area: We count the number pixels in the mask of segmentation which are 0.
 2. Perimeter: In the edge detected image, we count the number of pixels which are 1.
 3. After applying the segmentation mask on the color image, we sum the total pixels that are in the segmented area.
