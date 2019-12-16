@@ -34,7 +34,7 @@ background-color: #e6ffe6;
 
 ```{r include = FALSE}
   rm(list = ls(all.names = TRUE))
-  mypackages = c("knitr", "kableExtra", "grid", "gridExtra", "EBImage", "class", "randomForest", "caret", "e1071", "doMC", "factoextra", "glmnet", "kernlib")
+  mypackages = c("knitr", "kableExtra", "grid", "gridExtra", "EBImage", "class", "randomForest", "caret", "e1071", "doMC", "factoextra", "glmnet", "tidytext", "tidyverse")
   tmp = setdiff(mypackages, rownames(installed.packages()))
   if (length(tmp) > 0)
     install.packages(tmp, repos = "http://cran.us.r-project.org")
@@ -42,6 +42,7 @@ background-color: #e6ffe6;
 
 ```{r include = FALSE}
   rm(list = ls())
+  library(tidyverse)
   library(knitr)
   library(kableExtra)
   library(grid)
@@ -54,7 +55,7 @@ background-color: #e6ffe6;
   library(factoextra)
   library(glmnet)
   library(EBImage)
-  library(kernlab)
+  library(tidytext)
 ```
 
 ### [10 Points, half a page] Project description and summary.
@@ -74,7 +75,7 @@ For Q2, as a starting point, we began from the directions provided by the Americ
 #### Results
 ```{r results, echo=FALSE, results='asis'}
   q1_results = data.frame("Model" = c("Lasso", "SVM", "Random Forest"), "Accuracy" = c("72.00%", "70.00%", "92.00%"))
-  q2_results = data.frame("Model" = c("Lasso", "Random Forest"), "Accuracy" = c("74.00%", "92.00%"))
+  q2_results = data.frame("Model" = c("Lasso", "Random Forest", ""), "Accuracy" = c("74.00%", "92.00%", ""))
   
   t1 <- kable(q1_results, format = "latex", booktabs = T)
   t2 <- kable(q2_results, format = "latex", booktabs = T)
@@ -231,8 +232,8 @@ plot(best_svm, train.data, PC1 ~ PC3)
 Non-linear Kernel SVM :-
 
 ```{r}
-  ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
-  summary(ksvm_model)
+  # ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
+  # summary(ksvm_model)
 ```
 
 ```{r include = TRUE}
@@ -240,8 +241,8 @@ Non-linear Kernel SVM :-
   all_data_y <- c(pca.test[, 1], train.data[, 1])
   svmPred <- predict(best_svm, all_data_x)
   confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
-  ksvmPred <- predict(ksvm_model, all_data_x)
-  confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
+  # ksvmPred <- predict(ksvm_model, all_data_x)
+  # confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
 ```
 
 ### Classification Model 3. Random Forest
@@ -416,12 +417,11 @@ We generate 5 features for each of the channels:
 For performing classification with the lasso we are selecting the family as binomial. We are using all the pixels which we got after resizing the image to 100x100 and by using 3 channels. As we have split the data in 70/30 ratio. The xtrain data is the 210x30000 matrix and ytrain is corrsponding 210 response. xtest is 90x30000 metrix and ytest is corrsponding 90 responses.
 
 ```{r results = "hide"}
-  # use parallel for performace
-  registerDoMC(cores = 4)
+  set.seed(1)
   cv_glmnet_model <- cv.glmnet(xtrain, ytrain, parallel = TRUE, alpha=1, nfolds = 10,
                                family="binomial", type.measure = "class")
   # selecting the lambda within 1 standard error as best lambda
-  best_lambda = cv_glmnet_model$lambda.1se
+  best_lambda = cv_glmnet_model$lambda.min
   # training with best lambda selected with 10 fold cross validation
   glmnet_model <- glmnet(xtrain, ytrain, lambda = best_lambda, alpha=1,
                          family="binomial", type.measure = "class")
@@ -433,6 +433,22 @@ For performing classification with the lasso we are selecting the family as bino
 
 ```{r fig.height = 4, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
   plot(cv_glmnet_model)
+
+  #coef(cv_glmnet_model, s = "lambda.min")
+
+  p6 <- cv_glmnet_model$glmnet.fit %>%
+    tidy() %>%
+    filter(lambda == best_lambda, term != "(Intercept)") %>%
+    select(term = term, coefficient = estimate) %>%
+    arrange(coefficient) %>%
+    mutate(term = fct_reorder(term, coefficient)) %>%
+    ggplot(aes(term, coefficient)) +
+    geom_col(color = "skyblue", fill = "lightblue") +
+    coord_flip() +
+    labs(x = "",
+         y = "Importance of feature",
+         title = "Plot 9: What features are important in prediction")
+  
 ```
 
 After performing the 10 fold validation and selecting the best lambda we retrained the model with the selected best lambda and family binomial and type.measure class and useed that model for predicting class on the test data. Accuracy we got is around 72%
@@ -442,6 +458,10 @@ After performing the 10 fold validation and selecting the best lambda we retrain
     kable_styling(latex_options = c("hold_position"))
 ```
 
+```{r fig.height = 3, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  p6
+```
+By looking at this plot we can say that perimeter is the important fearure especially with color b and g after that we can see area also plays and important role.
 
 ### Classification Model 2. Random Forest
 
@@ -488,7 +508,7 @@ As with question1, we run through a random forest model with a grid search on nu
   kable(temp$table, caption="RandomForest Confusion Matrix")
 ```
 
-```{r}
+```{r fig.height = 3, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
   varImpPlot(best_rfModel)
 ```
 
