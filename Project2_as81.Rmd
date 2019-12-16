@@ -4,15 +4,16 @@ author: "Fall 2019, by Prathamesh(satpute3), Vivek(vivekg3) and Athul(as81)"
 date: 'Due: Monday, Dec 16 by 11:59 PM Pacific Time'
 header-includes:
   - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+  - \usepackage{booktabs}
 geometry: margin=2cm
+bibliography: Biblio-Bibtex.bib
+nocite: '@*'
 output:
   pdf_document:
     toc: no
   html_document:
     toc: no
     df_print: paged
-  bibliography: Biblio-Bibtex.bib
-  link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -40,6 +41,7 @@ background-color: #e6ffe6;
 ```
 
 ```{r include = FALSE}
+  rm(list = ls())
   library(knitr)
   library(kableExtra)
   library(grid)
@@ -55,163 +57,106 @@ background-color: #e6ffe6;
   library(kernlab)
 ```
 
-### [10 Points, half a page] Project description and summary. This part should summerise your goal, your approach, and your results.
+### [10 Points, half a page] Project description and summary.
 
-half page description goes here
+#### Goal
+Goal of this project is to identify malignent moles from benign moles. Provided image dataset has 150 benign and 150 malignent moles with varying resolutions. Some of the images has moles with hairs, markings on the microscope for measurement.
 
+#### Approach
+For Q1 we resized the images to 100x100 resolution and used that all pixel information to perform classification. 
 
-### [5 Points, half a page] Data processing for Question 1. Describe how you process the data so that it can be analyzed to answer question 1.
+For the first model we choose Lasso with best lambda which provided minimum misclassification error by doing 10 fold cross-validation and using that model for predicting the results. 
+For the second model we choose to do the PCA as it's an excellent choice when it comes to images. Using the selected principal components, we trained a SVM model. SVM Model is sensitive to parameters chosen. We used tune.svm() for trying different values of gamma and cost. We picked the gamma and cost which gives minimum classification error. 
+For the third model we use PCA features for training Random Forest model. We tried different values of no. of trees and no. of nodes to get the best parameters for the random forest model.
 
-half page description goes here
+For Q2, as a starting point, we began from the directions provided by the American Academy of Dermatology association, which targeted the ABCD of melanoma detection. @aad [Link here]. This provided us the intuition needed to generate the features. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. We extracted features which correlate to the attributes like Area, Perimeter, Circularity index, Color in the segmented region. We used Ridge Regression and Random Forest Model on this transformed dataset to see whether it improved the accuracy.
 
+#### Results
+```{r results, echo=FALSE, results='asis'}
+  q1_results = data.frame("Model" = c("Lasso", "SVM", "Random Forest"), "Accuracy" = c("72.00%", "70.00%", "92.00%"))
+  q2_results = data.frame("Model" = c("Lasso", "Random Forest"), "Accuracy" = c("74.00%", "92.00%"))
+  
+  t1 <- kable(q1_results, format = "latex", booktabs = T)
+  t2 <- kable(q2_results, format = "latex", booktabs = T)
+    
+  cat(c("\\begin{table}[!htb]
+    \\begin{minipage}{.5\\linewidth}
+      \\caption{Q1 Results}
+      \\centering",
+        t1,
+    "\\end{minipage}%
+    \\begin{minipage}{.5\\linewidth}
+      \\centering
+        \\caption{Q2 Results}",
+        t2,
+    "\\end{minipage} 
+    \\end{table}"
+    ))  
+```
 
-### [30 Points, within 5 pages] Classification models based on pixels.
+Write here some text analysing result - we have whole page for the point 1 - data processing starts on page 2 as per instructions provided
 
+### [5 Points, half a page] Data processing for Question 1.
+We have used the EBImage package for processing and getting image data. We have crated the 2 matrix of 150x30000 each for benign and malignant files. We resize each image to 100x100 pixels resized the images to 100 x 100 resolution and then used this resize image data as vector. As this data consits of 3 channels we got maxis with 100x100x3 cols and 150 rows. We used all the pixel information for the lasso model.
+
+We then choose to do the PCA as PCA is an excellent choice when it comes to images because inherently due to its natur, there is spatial corellation among pixel. Instead of using all the pixes, we can signifcantly reduce the number of features which encompass most of the variation. After plotting some information as shown below we choose 27 components which accounts for over 90% of the variation. We split our data in 70/30 train and test data split and perormed SVM and RF on it.
 
 ```{r include = FALSE}
-  rm(list = ls())
-
   get_image_data <- function(dirPath) {
     resize_w <- 100
     resize_h <- 100
     num_channels <- 3
     number_of_files <- 150
-    
+
     image_mat <- matrix(NA, nrow = number_of_files, ncol = resize_w * resize_h * num_channels)
     image_files <- list.files(dirPath)
-    
+
     count <- 1
     for (i in image_files) {
       file_open <- paste(dirPath, i, sep = "")
       img <- readImage(file_open)
-      img1 <- resize(img, resize_w, resize_h)
-      mat_img <- img1@.Data
+      resize_img <- resize(img, resize_w, resize_h)
+      mat_img <- resize_img@.Data
       vec_img <- as.vector(mat_img)
       image_mat[count, ] <- vec_img
       count <- count + 1
     }
-    
+
     return(image_mat)
   }
 
   benign_mat <- get_image_data("542/benign/")
   malignant_mat <- get_image_data("542/malignant/")
-```
 
-```{r include = FALSE}
-  # Create the dataset
   data_cancer <- rbind(benign_mat, malignant_mat)
   data_cancer <- cbind(c(rep(0, 150), rep(1, 150)), data_cancer)
-```
 
-
-```{r include = FALSE}
   # Split train test 70/30 with all data
   set.seed(12)
   train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
   train.data <- data_cancer[train,]
   test.data <- data_cancer[-train,]
-```
+  xtrain = train.data[, -1]
+  ytrain = train.data[, 1]
+  xtest = test.data[, -1]
+  ytest = test.data[, 1]
 
-```{r include = FALSE, results = "hide"}
-  # # knn
-  # 
-  # # default choice of k normally by sqrt of number of data
-  # # which gives value of 15 so choosing nearby values
-  # k = sqrt(dim(train.data)[1])
-  # 
-  # k_values <- c(1, 5, 10, 13,  15, 16, 20, 25)
-  # best_k  <- 1;
-  # best_accuracy <- 0;
-  # 
-  # for(k in k_values) {
-  #   knn_result <- knn(train=train.data[, -1], test=test.data[, -1], cl=train.data[, 1], k=k)
-  #   accuracy = 100 * mean(test.data[, 1] == knn_result)
-  #   cat("k:",k,"Accuracy:",accuracy,"\n")
-  # 
-  #   if(accuracy > best_accuracy){
-  #     best_k <- k
-  #     best_accuracy <- accuracy
-  #   }
-  # }
-  # results = data.frame("K" = best_k, "accuracy" = best_accuracy)
-```
-
-```{r}  
-  # kable(results, caption = "KNN")
-```
-
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-  #plot(test.data[ ,-1], col=ifelse(==1, "darkorange", "deepskyblue"), pch = 19, cex = 3, axes = FALSE, xlim= c(0, 1), ylim = c(0, 1))
-```
-
-
-```{r}
-# use parallel for performace 
-  registerDoMC(cores = 4)
-  cv_glmnet_model <- cv.glmnet(train.data[, -1], train.data[, 1], parallel = TRUE, alpha=1, family="binomial")
-```
-
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}  
-  plot(cv_glmnet_model)
-```
-
-
-```{r}
-  best_lambda = cv_glmnet_model$lambda.1se
-  # training with best lambda selected from the cv
-  train_glmnet_model <- glmnet(train.data[, -1], train.data[, 1], lambda = best_lambda, alpha=1, family="binomial")
-  
-  summary(train_glmnet_model)
-  
-  pred <- predict(train_glmnet_model, s = best_lambda, newx = test.data[, -1], type = "class")
-  accuracy = mean(test.data[, 1] == pred)
-  
-  results = data.frame("Best lambda" = best_lambda, "Accuracy" = accuracy)
-```  
-
-
-```{r} 
-  kable(results, "latex", caption = "Lasso Results", booktabs = T) %>%
-    kable_styling(latex_options = c("striped", "hold_position"))
-```
-
-PCA is an excellent choice when it comes to images because inherently due to its natur, there is spatial corellation among pixel. Instead of using all the pixes, we can signifcantly reduce the number of features which encompass most of the variation. We choose 27 number of components which accounts for over 90% of the variation.
-```{r include = FALSE}
-  #PCA 
+  #PCA
   set.seed(1)
   train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
   test <- (-train)
   pca.train <- data_cancer[train,]
   pca.test <- data_cancer[test,]
-```
 
-```{r include = FALSE}
-  pca.Cancer <- prcomp(pca.train[, -1], scale. = FALSE)
-```
+  pca.Cancer <- prcomp(as.data.frame(pca.train[, -1]), scale. = FALSE)
 
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-  frac_variance <- (pca.Cancer$sdev ^ 2) / sum(pca.Cancer$sdev ^ 2)
-  plot(
-    cumsum(frac_variance),
-    xlab = "Principal Component",
-    ylab = "Cumulative Proportion of Variance Explained",
-    type = "b"
-  )
-```
+  #frac_variance <- (pca.Cancer$sdev ^ 2) / sum(pca.Cancer$sdev ^ 2)
+  #I chose first 30 components
+  #sum(frac_variance[1:27])
 
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-  screeplot(pca.Cancer, type = "l", npcs = 30, main = "Screeplot of the first 30 PCs")
-```
+  p1 <- fviz_screeplot(pca.Cancer, addlabels = F,ncp = 30, ylim = c(0, 50))
 
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-  plot(frac_variance[0:30], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
-```
-
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
-  #Reduce 30000 to ~30 based on both graphs. We notice is that the first 6 components has an Eigenvalue >1 and explains almost 90% of variance
-  
-  fviz_pca_ind(
+  p2 <- fviz_pca_ind(
     pca.Cancer,
     geom.ind = "point",
     pointshape = 21,
@@ -219,7 +164,6 @@ PCA is an excellent choice when it comes to images because inherently due to its
     fill.ind = pca.train[, 1],
     col.ind = "black",
     label = "var",
-    
     legend.title = "Diagnosis"
   ) +
     ggtitle("2D PCA-plot from 30 feature dataset") +
@@ -227,117 +171,144 @@ PCA is an excellent choice when it comes to images because inherently due to its
 
 ```
 
+```{r fig.height = 2, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  grid.arrange(p1, p2, ncol=2)
+```
+
+### [30 Points, within 5 pages] Classification models based on pixels.
+
+### Classification Model 1. Lasso
+
+For performing classification with the lasso we are selecting the family as binomial. We are using all the pixels which we got after resizing the image to 100x100 and by using 3 channels. As we have split the data in 70/30 ratio. The xtrain data is the 210x30000 matrix and ytrain is corrsponding 210 response. xtest is 90x30000 metrix and ytest is corrsponding 90 responses.
+
+```{r results = "hide"}
+  # use parallel for performace
+  registerDoMC(cores = 4)
+  cv_glmnet_model <- cv.glmnet(xtrain, ytrain, parallel = TRUE, alpha=1, nfolds = 10,
+                               family="binomial", type.measure = "class")
+  # selecting the lambda within 1 standard error as best lambda
+  best_lambda = cv_glmnet_model$lambda.1se
+  # training with best lambda selected with 10 fold cross validation
+  glmnet_model <- glmnet(xtrain, ytrain, lambda = best_lambda, alpha=1,
+                         family="binomial", type.measure = "class")
+  # predicting on test data
+  pred <- predict(glmnet_model, s = best_lambda, newx = xtest, type = "class")
+  accuracy = mean(ytest == pred) * 100
+  lasso_results = data.frame("Best lambda" = best_lambda, "Accuracy" = as.numeric(accuracy,3))
+```
+
+```{r fig.height = 4, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+  plot(cv_glmnet_model)
+```
+
+After performing the 10 fold validation and selecting the best lambda we retrained the model with the selected best lambda and family binomial and type.measure class and useed that model for predicting class on the test data. Accuracy we got is around 72%
+
+```{r lasso_results, echo=FALSE, results='asis'}
+  kable(lasso_results, "latex", caption = "Lasso Results", booktabs = T) %>%
+    kable_styling(latex_options = c("hold_position"))
+```
+
+
+### Classification Model 2. SVM
+
 ```{r include = FALSE}
-  #I chose first 30 components
-  sum(frac_variance[1:27])
+  # train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
+  # train.data <- train.data[, 1:28]
+  # test.data <- predict(pca.Cancer, newdata = pca.test[, -1])
+  # test.data <- test.data[, 1:27]
 ```
 
 ```{r include = FALSE}
-  train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
-  train.data <- train.data[, 1:28]
-  test.data <- predict(pca.Cancer, newdata = pca.test[, -1])
-  test.data <- test.data[, 1:27]
+  # tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", 
+  #                   range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
+  # best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear", 
+  #                 cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
+  # summary(best_svm)
 ```
+
+```{r include = FALSE}
+  # all_data_x <- rbind(test.data, train.data[, -1])
+  # all_data_y <- c(pca.test[, 1], train.data[, 1])
+  # svmPred <- predict(best_svm, all_data_x)
+  # confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+```
+
+### Classification Model 3. Random Forest
 
 ```{r include = FALSE, results = "hide"}
-  set.seed(1)
-  num_trees <- c(500)#c(1,10,50,100,200,500,1000,1250,2000,5000)
-  num_nodes <- c(1,5,10,20,50) 
-  all_data_x <- rbind(test.data, train.data[, -1])
-  all_data_y <- c(pca.test[, 1], train.data[, 1])
-  best_i <- 1
-  best_j <- 1
-  best_all_error <- 100
-  
-  for(i in num_trees) {
-    for (j in num_nodes) {
-      rfModel = randomForest(
-        formula = as.factor(y) ~ .,
-        data = train.data,
-        importance = T,
-        ntree = i,
-        nodesize = j
-      )
-      temp <- cbind(as.numeric(as.character(rfModel$predicted)), (train.data$y))
-      yhat.test = predict(rfModel, test.data)
-      training_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
-      temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
-      test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
-      yhat.all <- predict(rfModel, all_data_x)
-      temp <- cbind(as.numeric(as.character(yhat.all)), as.numeric(all_data_y))
-      all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-      #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
-      if (all_error < best_all_error) {
-        best_i <- i
-        best_j <- j
-        best_all_error <- all_error
-        best_rfModel <- rfModel
-      }
-    }
-  }
+  # set.seed(1)
+  # num_trees <- c(1,10,50,100,500,1000,1250,2000)
+  # num_nodes <- c(1,5,10)
+  # all_data_x <- rbind(test.data, train.data[, -1])
+  # all_data_y <- c(pca.test[, 1], train.data[, 1])
+  # best_i <- 1
+  # best_j <- 1
+  # best_all_error <- 100
+  # 
+  # for(i in num_trees) {
+  #   for (j in num_nodes) {
+  #     rfModel = randomForest(
+  #       formula = as.factor(y) ~ .,
+  #       data = train.data,
+  #       importance = T,
+  #       ntree = i,
+  #       nodesize = j
+  #     )
+  #     temp <- cbind(as.numeric(as.character(rfModel$predicted)), (train.data$y))
+  #     yhat.test = predict(rfModel, test.data)
+  #     training_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
+  #     temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
+  #     test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
+  #     yhat.all <- predict(rfModel, all_data_x)
+  #     temp <- cbind(as.numeric(as.character(yhat.all)), as.numeric(all_data_y))
+  #     all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+  #     #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
+  #     if (all_error < best_all_error) {
+  #       best_i <- i
+  #       best_j <- j
+  #       best_all_error <- all_error
+  #       best_rfModel <- rfModel
+  #     }
+  #   }
+  # }
 ```
 
 ```{r}
-#varImpPlot(best_rfModel)
-plot(best_rfModel)
+  # varImpPlot(best_rfModel)
+  # plot(best_rfModel)
 ```
 
 We run a random forest through a grid search through of number of trees (1 to 5000) and nodesize(1 to 50). We find that our best model is with 500 trees and a nodesize of 20. Our accuracy on the entire set is 93.33%
-```{r include = TRUE}
-  yhat.all <- predict(best_rfModel, all_data_x)
-  temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
-  all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-  temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
-  kable(temp$table, caption="RandomForest Confusion Matrix")
-```
-
-SVM is very sensitive to the choice of parameters. SVM has some parameters that have to be tuned to get better performance. It is very sensitive to the choice of parameters. Used tune.svm() to try out different parameters. It takes in different values of gamma, cost and returns the one with minimum classification error for the 10-fold cross validation. Used the best gamma and cost values to train the best_svm model. 
 
 ```{r include = TRUE}
-  tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
-  best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
-  summary(best_svm)
+  # yhat.all <- predict(best_rfModel, all_data_x)
+  # temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
+  # all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
+  # temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
+  # kable(temp$table, caption="RandomForest Confusion Matrix")
 ```
 
-SVM for Training data : First two Principle Components
-
-```{r include = TRUE}
-plot(best_svm, train.data, PC1 ~ PC2)
-```
-
-Non-linear Kernel SVM :-
-
-```{r}
-  ksvm_model <- ksvm(as.factor(y)~., data=train.data, kernel="rbfdot")
-  summary(ksvm_model)
-```
-
-```{r include = TRUE}
-  all_data_x <- rbind(test.data, train.data[, -1])
-  all_data_y <- c(pca.test[, 1], train.data[, 1])
-  ksvmPred <- predict(ksvm_model, all_data_x)
-  confusionMatrix(as.factor(ksvmPred), as.factor(all_data_y))
-```
 
 
 ### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
 
-The American Academy of Dermatology Association (@aad) listes the ABCDE of detecting Melanoma. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. Since in this project statement, are given a series of pictures over a lesion over a period of time, we will not be able to create a specific feature for Evolving. Hence, we concentrate on the remaining.  
+The American Academy of Dermatology Association (@aad) listes the ABCDE of detecting Melanoma. ABCDE is an acronym for Asymmetry, Border, Color, Diameter and Evolving respectively. Since in this project statement, are given a series of pictures over a lesion over a period of time, we will not be able to create a specific feature for Evolving. Hence, we concentrate on the remaining.
 A great tools for us is EBImage which is package developed by @Pau2010 which provides us very usable functions for image processing tasks. We use various features of this package for our feature engineering.
 @RA2012 provides high level features one could use to help engineer our features. Their main work talks about the different way to quantize irregularities. They use a mix of both coarse and fine grain methods to achieve this.
 @SJ2015 Shivangi et al, also talks about a good pipeline to this. Their work diffs in that they introduce quantitative metrics to mark irregulaties in shape. They also take into account the size of the lesion. However to this accurately they must have ensured that the each image is taken from the same distance and focus. We do not have that information regarding our dataset, so we must rely on ration. One of the interesting features proposed in using Circularity Index, it is the ration of (4*pi*Area)/(Perimeter*Perimeter). This is a geat metric becaus this is scale invariant.
 Of course is @SJ2015 and @Pau@2010, they do concentrate a fair amount on preprocessing steps like illumination and segmentation.
 
-
 ### [10 Points, 1 page] Feature engineering. Motivated by what you have read (or your understanding), process the data in a reasonable way such that the new variables are more intuitive to your collaborator/clinicians. You need to describe clearly what is your data processing criteria and how your variables are calculated.
 
-![Feature Engineering Pipeline](Pipeline.jpg)
+```{r fig.height = 6, fig.width = 8, out.width = '100%', fig.align = "center", echo = FALSE}
+  include_graphics("Pipeline.jpg")
+```
 
 Our pipeline takes an input image and prepares it for feature extraction. Once, we have our features, we then run it through various classifiers to observe the results. All steps in the preprocessing steps are done in 3 planes. We keep results from all these planes, as the classifier should be able to choose from them.
 Preprocessing steps :
 1. Resize all images to 400 x400
 2. Convert Color to Grayscale but also preseve the color image.
-3. We run it through a low pass filter to remove hairs and scale markings. 
+3. We run it through a low pass filter to remove hairs and scale markings.
 4. Similar to @SJ2015, we do automatic thresholding by Otsu in each plane which generate the mask. We apply this mask of the low pass filtered image so that we dont see any small blobs or markings inside the lesion.
 5. We apply image detection on this segmented filter.
 6. We take the color image and pass it through the segmented image, so we will only see color in the segmented section of the interested area.
@@ -352,206 +323,205 @@ We generate 5 features for each of the channels:
 5. Circularity Index: The ratio of (4*pi*area)/(perimeter^2)
 
 
+<!-- ### [20 Points, 2 page] Classification models based on new features. Fit two different classification models to identify malignant moles. You can either use the ones from Question 1 or use some new models if you believe they may perform better on the new features. Same requirements of Question 1 apply to this part. Besides, you should focus more on variable selection and interpretation. -->
 
-### [20 Points, 2 page] Classification models based on new features. Fit two different classification models to identify malignant moles. You can either use the ones from Question 1 or use some new models if you believe they may perform better on the new features. Same requirements of Question 1 apply to this part. Besides, you should focus more on variable selection and interpretation.
+<!-- ```{r include = FALSE} -->
+<!--   extract_features <- function(img_in) { -->
+<!--     #img_in <- img -->
+<!--     resize_w <- 400 -->
+<!--     resize_h <- 400 -->
+<!--     img_resize <- resize(img_in, resize_w, resize_h) -->
+<!--     #apply contrant enhancement and gamma correction - Not sure if this is needed. It didn't help -->
+<!--     #img_en <- (img_in * 2) ^ 0.5 -->
 
-```{r include = FALSE}
-  extract_features <- function(img_in) {
-    #img_in <- img
-    resize_w <- 400
-    resize_h <- 400
-    img_resize <- resize(img_in, resize_w, resize_h)
-    #apply contrant enhancement and gamma correction - Not sure if this is needed. It didn't help
-    #img_en <- (img_in * 2) ^ 0.5
-    
-    img_gray <- img_resize
-    colorMode(img_gray) = Grayscale
-    
-    #to remove hairs and what looks like marks on microscope
-    #median filter - This did not help at all
-    #img_median = medianFilter(img_gray, 1)
-    
-    #Low Pass filter
-    w = makeBrush(size = 31,
-                  shape = 'gaussian',
-                  sigma = 5)
-    img_lp = filter2(img_gray, w)
-  
-    img_in_th <- img_lp
-    threshold <- otsu(img_in_th)
-    #cat(threshold,"\n")
-    img_th = EBImage::combine(mapply(
-      function(frame, th)
-        frame > th,
-      getFrames(img_in_th),
-      threshold,
-      SIMPLIFY = FALSE
-    ))
-    
-    img_th_val <- img_th
-    img_th_val[which(img_th) == TRUE] <- 1
-    img_th_val[which(img_th) == TRUE] <- 0
-    fhi = matrix(1, nrow = 3, ncol = 3)
-    fhi[2, 2] = -8
-    img_fhi = filter2(img_th_val, fhi)
-    img_fhi_col <- filter2(img_gray, fhi)
-    #display(img_fhi)
-    #display(combine(img_gray,img_th_val,img_fhi, img_fhi_col), all=TRUE)
-    
-    #Features based on preprocessing
-    #area_f <- length(which(img_th_val==1))
-    #perimeter_f <- length(which(img_fhi==1))
-    area_f <- c(0, 0, 0)
-    perimeter_f <- c(0, 0, 0)
-    rgb_f <- c(0, 0, 0)
-    img_col_thresh <- img_resize * img_th_val
-    for (i in 1:3) {
-      area_f[i] <- length(which(img_th_val[, , i] == 0)) / (resize_h * resize_w)
-      perimeter_f[i] <-
-        length(which(img_fhi[, , i] == 1)) / (resize_h * resize_w)
-      rgb_f[i] <-
-        sum(img_col_thresh[which(img_th_val[, , i] == 0)]) / (resize_h * resize_w)
-    }
-    reg_f <- area_f / perimeter_f
-    
-   return(c(area_f, perimeter_f, rgb_f, (area_f/perimeter_f), (4*pi*area_f/perimeter_f^2)))
-  }
-```
+<!--     img_gray <- img_resize -->
+<!--     colorMode(img_gray) = Grayscale -->
 
-```{r include = FALSE}
-  benign_files <- list.files("542/benign/")
-  malignant_files <- list.files("542/malignant/")
-  number_of_files <- 150
-  benign_mat <- matrix(NA, nrow = number_of_files, ncol = 15)
-  malignant_mat <- matrix(NA, nrow = number_of_files, ncol = 15)
-  count <- 1
-  for (i in benign_files) {
-    file_open <- paste("542/benign/", i, sep = "")
-    img <- readImage(file_open)
-    benign_mat[count, ] <- extract_features(img)
-    count <- count + 1
-  }
-  
-  count <- 1
-  for (i in malignant_files) {
-    file_open <- paste("542/malignant/", i, sep = "")
-    img <- readImage(file_open)
-    malignant_mat[count, ] <- extract_features(img)
-    count <- count + 1
-  }
+<!--     #to remove hairs and what looks like marks on microscope -->
+<!--     #median filter - This did not help at all -->
+<!--     #img_median = medianFilter(img_gray, 1) -->
 
-```
+<!--     #Low Pass filter -->
+<!--     w = makeBrush(size = 31, -->
+<!--                   shape = 'gaussian', -->
+<!--                   sigma = 5) -->
+<!--     img_lp = filter2(img_gray, w) -->
 
-```{r include = FALSE}
-  # Create the dataset
-  data_cancer <- rbind(benign_mat, malignant_mat)
-  data_cancer <-
-    cbind(c(rep(0, 150), rep(1, 150)), data_cancer)
-  colnames(data_cancer) <-
-    c(
-      "y",
-      "area_r",
-      "area_g",
-      "area_b",
-      "perimeter_r",
-      "permiter_g",
-      "perimeter_b",
-      "color_r",
-      "color_g",
-      "color_b",
-      "reg_r",
-      "reg_g",
-      "reg_b",
-      "crc_r",
-      "crc_g",
-      "crc_b"
-    )
-  data_cancer[which(is.infinite(data_cancer) == TRUE)] <- 0
-  set.seed(1)
-  train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7)
-  test <- (-train)
-  train.data <- data_cancer[train, ]
-  test.data <- data_cancer[test, ]
-```
+<!--     img_in_th <- img_lp -->
+<!--     threshold <- otsu(img_in_th) -->
+<!--     #cat(threshold,"\n") -->
+<!--     img_th = EBImage::combine(mapply( -->
+<!--       function(frame, th) -->
+<!--         frame > th, -->
+<!--       getFrames(img_in_th), -->
+<!--       threshold, -->
+<!--       SIMPLIFY = FALSE -->
+<!--     )) -->
 
-```{r include = FALSE}
-  set.seed(1)
-  num_trees <- c(1,10,50,100,200,500,1000,1250,1500,2000)
-  num_nodes <- c(1,5,10,20,50) 
-  all_data_x <- rbind(test.data[,-1],train.data[,-1])
-  all_data_y <- c(test.data[,1],train.data[,1])
-  best_i <- 1;
-  best_j <- 1;
-  best_all_error <- 100
-  for(i in num_trees){
-    for(j in num_nodes){
-      rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=i, nodesize = j)
-      temp <- cbind(as.numeric(as.character(rfModel$predicted)),(train.data[,1]))
-      yhat.test = predict(rfModel, test.data)
-      training_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(train.data)
-      temp <- cbind(as.numeric(as.character(yhat.test)),(test.data[,1]))
-      test_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(test.data)
-      yhat.all <- predict(rfModel,all_data_x)
-      temp <- cbind(as.numeric(as.character(yhat.all)),as.numeric(all_data_y))
-      all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x)
-      #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n")
-      if(all_error < best_all_error){
-        best_i <- i
-        best_j <- j
-        best_all_error <- all_error
-        best_rfModel <- rfModel
-      }
-    }
-  }
-```
+<!--     img_th_val <- img_th -->
+<!--     img_th_val[which(img_th) == TRUE] <- 1 -->
+<!--     img_th_val[which(img_th) == TRUE] <- 0 -->
+<!--     fhi = matrix(1, nrow = 3, ncol = 3) -->
+<!--     fhi[2, 2] = -8 -->
+<!--     img_fhi = filter2(img_th_val, fhi) -->
+<!--     img_fhi_col <- filter2(img_gray, fhi) -->
+<!--     #display(img_fhi) -->
+<!--     #display(combine(img_gray,img_th_val,img_fhi, img_fhi_col), all=TRUE) -->
 
-As with question1, we run through a random forest model with a grid search on number of tress and nodesize. The best model was with 100 trees and 5 nodesize with an accuracy of 92%. 
+<!--     #Features based on preprocessing -->
+<!--     #area_f <- length(which(img_th_val==1)) -->
+<!--     #perimeter_f <- length(which(img_fhi==1)) -->
+<!--     area_f <- c(0, 0, 0) -->
+<!--     perimeter_f <- c(0, 0, 0) -->
+<!--     rgb_f <- c(0, 0, 0) -->
+<!--     img_col_thresh <- img_resize * img_th_val -->
+<!--     for (i in 1:3) { -->
+<!--       area_f[i] <- length(which(img_th_val[, , i] == 0)) / (resize_h * resize_w) -->
+<!--       perimeter_f[i] <- -->
+<!--         length(which(img_fhi[, , i] == 1)) / (resize_h * resize_w) -->
+<!--       rgb_f[i] <- -->
+<!--         sum(img_col_thresh[which(img_th_val[, , i] == 0)]) / (resize_h * resize_w) -->
+<!--     } -->
+<!--     reg_f <- area_f / perimeter_f -->
 
-```{r include = TRUE}
-  #best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j)
-  yhat.all <- predict(best_rfModel, all_data_x)
-  temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y))
-  all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x)
-  temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y))
-  kable(temp$table, caption="RandomForest Confusion Matrix")
-```
+<!--    return(c(area_f, perimeter_f, rgb_f, (area_f/perimeter_f), (4*pi*area_f/perimeter_f^2))) -->
+<!--   } -->
+<!-- ``` -->
 
-```{r}
-  varImpPlot(best_rfModel)
-```
+<!-- ```{r include = FALSE} -->
+<!--   benign_files <- list.files("542/benign/") -->
+<!--   malignant_files <- list.files("542/malignant/") -->
+<!--   number_of_files <- 150 -->
+<!--   benign_mat <- matrix(NA, nrow = number_of_files, ncol = 15) -->
+<!--   malignant_mat <- matrix(NA, nrow = number_of_files, ncol = 15) -->
+<!--   count <- 1 -->
+<!--   for (i in benign_files) { -->
+<!--     file_open <- paste("542/benign/", i, sep = "") -->
+<!--     img <- readImage(file_open) -->
+<!--     benign_mat[count, ] <- extract_features(img) -->
+<!--     count <- count + 1 -->
+<!--   } -->
 
-By Making understandable features, we see from above that:
-1. Area, color and perimeter are key features. If the lesion contains multiple colors, then as @aad explained, it is a high chance of cancer.
-2. The next set of feature are the regularity and circularity index respectively.
-3. Red is the least important channel in the model. We saw during preprocessing as well, the Red plane didn not yield good results as well.
+<!--   count <- 1 -->
+<!--   for (i in malignant_files) { -->
+<!--     file_open <- paste("542/malignant/", i, sep = "") -->
+<!--     img <- readImage(file_open) -->
+<!--     malignant_mat[count, ] <- extract_features(img) -->
+<!--     count <- count + 1 -->
+<!--   } -->
 
-```{r}
-# use parallel for performace 
-  registerDoMC(cores = 4)
+<!-- ``` -->
 
-  # Ridge Regression
-  cv_glmnet_model <- cv.glmnet(train.data[, -1], train.data[, 1], parallel = TRUE, alpha=0, family="binomial")
-```
+<!-- ```{r include = FALSE} -->
+<!--   # Create the dataset -->
+<!--   data_cancer <- rbind(benign_mat, malignant_mat) -->
+<!--   data_cancer <- -->
+<!--     cbind(c(rep(0, 150), rep(1, 150)), data_cancer) -->
+<!--   colnames(data_cancer) <- -->
+<!--     c( -->
+<!--       "y", -->
+<!--       "area_r", -->
+<!--       "area_g", -->
+<!--       "area_b", -->
+<!--       "perimeter_r", -->
+<!--       "permiter_g", -->
+<!--       "perimeter_b", -->
+<!--       "color_r", -->
+<!--       "color_g", -->
+<!--       "color_b", -->
+<!--       "reg_r", -->
+<!--       "reg_g", -->
+<!--       "reg_b", -->
+<!--       "crc_r", -->
+<!--       "crc_g", -->
+<!--       "crc_b" -->
+<!--     ) -->
+<!--   data_cancer[which(is.infinite(data_cancer) == TRUE)] <- 0 -->
+<!--   set.seed(1) -->
+<!--   train = sample (1:nrow(data_cancer), nrow(data_cancer) * 0.7) -->
+<!--   test <- (-train) -->
+<!--   train.data <- data_cancer[train, ] -->
+<!--   test.data <- data_cancer[test, ] -->
+<!-- ``` -->
 
-```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}  
-  plot(cv_glmnet_model)
-```
+<!-- ```{r include = FALSE} -->
+<!--   set.seed(1) -->
+<!--   num_trees <- c(1,10,50,100,500,1000,1250,1500,2000) -->
+<!--   num_nodes <- c(1,5,10)  -->
+<!--   all_data_x <- rbind(test.data[,-1],train.data[,-1]) -->
+<!--   all_data_y <- c(test.data[,1],train.data[,1]) -->
+<!--   best_i <- 1; -->
+<!--   best_j <- 1; -->
+<!--   best_all_error <- 100 -->
+<!--   for(i in num_trees){ -->
+<!--     for(j in num_nodes){ -->
+<!--       rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=i, nodesize = j) -->
+<!--       temp <- cbind(as.numeric(as.character(rfModel$predicted)),(train.data[,1])) -->
+<!--       yhat.test = predict(rfModel, test.data) -->
+<!--       training_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(train.data) -->
+<!--       temp <- cbind(as.numeric(as.character(yhat.test)),(test.data[,1])) -->
+<!--       test_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(test.data) -->
+<!--       yhat.all <- predict(rfModel,all_data_x) -->
+<!--       temp <- cbind(as.numeric(as.character(yhat.all)),as.numeric(all_data_y)) -->
+<!--       all_error <- length(which(temp[,1]!=temp[,2]))*100/nrow(all_data_x) -->
+<!--       #cat("Num of Trees:",i,"Num of nodes:",j," Training Error:",training_error," Test Error:",test_error," All Error:",all_error,"\n") -->
+<!--       if(all_error < best_all_error){ -->
+<!--         best_i <- i -->
+<!--         best_j <- j -->
+<!--         best_all_error <- all_error -->
+<!--         best_rfModel <- rfModel -->
+<!--       } -->
+<!--     } -->
+<!--   } -->
+<!-- ``` -->
 
+<!-- As with question1, we run through a random forest model with a grid search on number of tress and nodesize. The best model was with 100 trees and 5 nodesize with an accuracy of 92%.  -->
 
-```{r}
-  best_lambda = cv_glmnet_model$lambda.1se
-  # training with best lambda selected from the cv
-  train_glmnet_model <- glmnet(train.data[, -1], train.data[, 1], lambda = best_lambda, alpha=0, family="binomial")
-  
-  summary(train_glmnet_model)
-  
-  pred <- predict(train_glmnet_model, s = best_lambda, newx = test.data[, -1], type = "class")
-  accuracy = mean(test.data[, 1] == pred)
-  
-  results = data.frame("Best lambda" = best_lambda, "Accuracy" = accuracy)
-```  
+<!-- ```{r include = TRUE} -->
+<!--   #best_rfModel <- randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=best_i, nodesize = best_j) -->
+<!--   yhat.all <- predict(best_rfModel, all_data_x) -->
+<!--   temp <- cbind(as.numeric(as.character(yhat.all)), (all_data_y)) -->
+<!--   all_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(all_data_x) -->
+<!--   temp <- confusionMatrix(as.factor(yhat.all), as.factor(all_data_y)) -->
+<!--   kable(temp$table, caption="RandomForest Confusion Matrix") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!--   varImpPlot(best_rfModel) -->
+<!-- ``` -->
+
+<!-- By Making understandable features, we see from above that: -->
+<!-- 1. Area, color and perimeter are key features. If the lesion contains multiple colors, then as @aad explained, it is a high chance of cancer. -->
+<!-- 2. The next set of feature are the regularity and circularity index respectively. -->
+<!-- 3. Red is the least important channel in the model. We saw during preprocessing as well, the Red plane didn not yield good results as well. -->
+
+<!-- ```{r} -->
+<!-- # use parallel for performace  -->
+<!--   registerDoMC(cores = 4) -->
+
+<!--   # Ridge Regression -->
+<!--   cv_glmnet_model <- cv.glmnet(train.data[, -1], train.data[, 1], parallel = TRUE, alpha=0, family="binomial") -->
+<!-- ``` -->
+
+<!-- ```{r fig.height = 5, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}   -->
+<!--   plot(cv_glmnet_model) -->
+<!-- ``` -->
 
 
-```{r} 
-  kable(results, caption = "Ridge Regression Results")
-```
+<!-- ```{r} -->
+<!--   best_lambda = cv_glmnet_model$lambda.1se -->
+<!--   # training with best lambda selected from the cv -->
+<!--   train_glmnet_model <- glmnet(train.data[, -1], train.data[, 1], lambda = best_lambda, alpha=0, family="binomial") -->
+
+<!--   summary(train_glmnet_model) -->
+
+<!--   pred <- predict(train_glmnet_model, s = best_lambda, newx = test.data[, -1], type = "class") -->
+<!--   accuracy = mean(test.data[, 1] == pred) -->
+
+<!--   results = data.frame("Best lambda" = best_lambda, "Accuracy" = accuracy) -->
+<!-- ```   -->
+
+<!-- ```{r}  -->
+<!--   kable(results, "latex", caption = "Lasso Results", booktabs = T) %>% -->
+<!--     kable_styling(latex_options = c("striped", "hold_position")) -->
+<!-- ``` -->
