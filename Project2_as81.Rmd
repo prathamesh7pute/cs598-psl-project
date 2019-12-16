@@ -172,7 +172,8 @@ half page description goes here
 
 
 ```{r} 
-  kable(results, caption = "Lasso Regression Results")
+  kable(results, "latex", caption = "Lasso Results", booktabs = T) %>%
+    kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
 PCA is an excellent choice when it comes to images because inherently due to its natur, there is spatial corellation among pixel. Instead of using all the pixes, we can signifcantly reduce the number of features which encompass most of the variation. We choose 27 number of components which accounts for over 90% of the variation.
@@ -523,19 +524,6 @@ By Making understandable features, we see from above that:
 1. Area, color and perimeter are key features. If the lesion contains multiple colors, then as @aad explained, it is a high chance of cancer.
 2. The next set of feature are the regularity and circularity index respectively.
 3. Red is the least important channel in the model. We saw during preprocessing as well, the Red plane didn not yield good results as well.
-```{r include = FALSE, eval=FALSE}
-  #FIXME
-  tuned_svm <- tune(svm, train.x=train.data, train.y = train.data[,1], kernel="linear", range=list(cost=10^(-2:2), gamma=c(0.1, 0.25,0.5,0.75,1,2)) )
-  best_svm <- svm(as.factor(y)~., data=train.data, kernel="linear",cost=tuned_svm$best.parameters$cost, gamma=tuned_svm$best.parameters$gamma)
-  summary(best_svm)
-```
-
-```{r include = FALSE, eval=FALSE }
-  ##FIXME
-  svmPred <- predict(best_svm, all_data_x)
-  confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
-```
-
 
 ```{r}
 # use parallel for performace 
