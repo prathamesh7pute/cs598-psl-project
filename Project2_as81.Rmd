@@ -58,7 +58,7 @@ background-color: #e6ffe6;
   library(tidytext)
 ```
 
-### [10 Points, half a page] Project description and summary.
+### [10 Points, 1 page] Project description and summary. 
 
 #### Goal
 Goal of this project is to identify malignent moles from benign moles. Provided image dataset has 150 benign and 150 malignent moles with varying resolutions and with some of the images have moles with hairs, markings on the microscope for measurement. This data has to be processed and classified to identify malignent moles from the benign ones. We look for model interpretability as one of the key attributes.
@@ -184,10 +184,12 @@ We then choose to do the PCA as PCA is an excellent choice when it comes to imag
 
 We decided to use lasso for Q1 as it does both parameter shrinkage and variable selection automatically. For performing classification with the lasso we are selecting the family as binomial. We are using all the pixels which we got after resizing the image to 100x100 and we are using 3 channels. As we have split the data in 70/30 ratio, we got xtrain data as 210x30000 matrix and ytrain as  210 corresponding responses. xtest is 90x30000 matrix and ytest is corrsponding 90 responses.
 
-```{r results = "hide"}
-  # use parallel for performace
+```{r include = FALSE}
   registerDoMC(cores = 4)
   set.seed(1)
+```
+
+```{r results = "hide"}
   cv_glmnet_model <- cv.glmnet(xtrain, ytrain, parallel = TRUE, alpha=1, nfolds = 10,
                                family="binomial", type.measure = "class")
   # selecting the lambda which provided minimum misclassification error as best lambda
@@ -220,8 +222,7 @@ We decided to use lasso for Q1 as it does both parameter shrinkage and variable 
 ```{r fig.height = 3, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
   plot(cv_glmnet_model)
 ```
-
-After performing the 10 fold validation and selecting the best lambda we retrained the model with the selected best lambda and family binomial and type.measure class and used this model for predicting class on the test data. We got around 64% accuracy for the test data.
+After performing the 10 fold validation and selecting the best lambda we retrained the model with the selected best lambda and family binomial and type.measure class and used this model for predicting class on the test data.
 
 ```{r echo=FALSE, results='asis'}
   lasso_results = data.frame("Best lambda" = best_lambda, "Train" = as.numeric(lasso_train_accuracy,3),"Test" = as.numeric(lasso_test_accuracy,3))
@@ -230,19 +231,20 @@ After performing the 10 fold validation and selecting the best lambda we retrain
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{Lasso Results}
+      \\caption{Lasso Accuracies}
       \\centering",
         t1,
     "\\end{minipage}%
     \\begin{minipage}{.5\\linewidth}
       \\centering
-        \\caption{Lasso Confusion Matrix on complete data}",
+        \\caption{Lasso Confusion Matrix}",
         t2,
     "\\end{minipage} 
     \\end{table}"
     ))  
   
 ```
+We got around 64% accuracy for the test data with the best lambda on retrained model. We can see that on the training it overfits the data as are using all 300 images and 30000 features.
 
 ```{r include = FALSE}
   train.data <- data.frame(y = pca.train[, 1], pca.Cancer$x)
@@ -257,34 +259,19 @@ When we select only few features from the original dataset and build a linear SV
 
 ```{r include = TRUE}
   set.seed(1)
-  tuned_svm <- tune(
-    svm,
-    train.x = train.data,
-    train.y = train.data[, 1],
-    kernel = "linear",
-    range = list(
-      cost = 10 ^ (-2:2),
-      gamma = c(0.1, 0.25, 0.5, 0.75, 1, 2)
-    )
-  )
+  tuned_svm <- tune(svm, train.x = train.data, train.y = train.data[, 1], kernel = "linear", 
+                    range = list(cost = 10 ^ (-2:2), gamma = c(0.1, 0.25, 0.5, 0.75, 1, 2)))
 ```
 
 We noticed SVM is very sensitive to the choice of parameters. We trained a linear SVM model with the best parameters we got from tuning, gamma = 0.1 and cost = 1. We are also performing 10-fold cross validation to assess the quality of the model.
 
 ```{r}
-  best_svm <- svm(
-    as.factor(y) ~ .,
-    data = train.data,
-    kernel = "linear",
-    cost = tuned_svm$best.parameters$cost,
-    gamma = tuned_svm$best.parameters$gamma,
-    cross = 10
-  )
+  best_svm <- svm(as.factor(y) ~ ., data = train.data, kernel = "linear",
+    cost = tuned_svm$best.parameters$cost, gamma = tuned_svm$best.parameters$gamma, cross = 10)
 ```
 
 We tried different hyperplanes to separate the dataset. We noticed that a simple linear split is consistently performing well. 133 support vectors have been identified by the best svm model.
 
-SVM for Training data : First two Principle Components
 ```{r fig.height = 4, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
   plot(best_svm, train.data, PC1 ~ PC2)
 ```
@@ -315,44 +302,38 @@ SVM for Training data : First two Principle Components
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{SVM with PCA Results}
+      \\caption{SVM with PCA Accuracies}
       \\centering",
         t1,
     "\\end{minipage}%
     \\begin{minipage}{.5\\linewidth}
       \\centering
-        \\caption{SVM Confusion Matrix on complete data}",
+        \\caption{SVM Confusion Matrix}",
         t2,
     "\\end{minipage} 
     \\end{table}"
     ))  
 ```
-
 Linear SVM with 133 support vectors, trained over 27 Principal Components performs consistently with training accuracy of 76% and testing accuracy of 71%.
 
 ### Classification Model 3. Random Forest with PCA
 
 We used the dataset with 27 Principal Components to train a tree-based classification model. Random Forest is a popular decision tree model as it performs well for high-dimensional data and bins the outliers. Choice of no. of trees and no. of nodes is very important, so we did a grid search.
-
-```{r results = "hide"}
-   set.seed(1)
-   num_trees <- c(1,10,50,100,500,1000,1250,2000)
-   num_nodes <- c(1, 5, 10)
+```{r include = FALSE}
    all_data_x <- rbind(test.data, train.data[, -1])
    all_data_y <- c(pca.test[, 1], train.data[, 1])
    best_i <- 1
    best_j <- 1
    best_all_error <- 100
-   
+```
+
+```{r results = "hide"}
+   set.seed(1)
+   num_trees <- c(1,10,50,100,500,1000,1250,2000)
+   num_nodes <- c(1, 5, 10)
    for(i in num_trees) {
      for (j in num_nodes) {
-       rfModel = randomForest(
-         formula = as.factor(y) ~ .,
-         data = train.data,
-         importance = T,
-         ntree = i,
-         nodesize = j
-       )
+       rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data,importance = T,ntree = i,nodesize = j)
        temp <- cbind(as.numeric(as.character(rfModel$predicted)), (train.data$y))
        yhat.test = predict(rfModel, test.data)
        training_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
@@ -377,18 +358,18 @@ We used the dataset with 27 Principal Components to train a tree-based classific
 
 This plot helps us in understanding the important variables chosen by the best random forest model. MeanDecreaseAccuracy helps us in understanding the importance of a variable's inclusion in reducing the classification error. MeanDecreaseGini helps us in understanding the relevance of variables in classification using node impurity (Gini). 
 
-```{r fig.height = 3, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+```{r fig.height = 4, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
    plot(best_rfModel, main = "Best Random Forest Model", legend = c("bottomright", pch=1))
 ```
 
-```{r}
+```{r include = FALSE}
   yhat.train = predict(best_rfModel, train.data)
   temp <- cbind(as.numeric(as.character(yhat.train)), (train.data[, 1]))
   train_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
   train_accuracy = mean(train.data[,1] == yhat.train) * 100
 ```
 
-```{r}
+```{r include = FALSE}
   yhat.test = predict(best_rfModel, test.data)
   temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
   test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
@@ -407,13 +388,13 @@ This plot helps us in understanding the important variables chosen by the best r
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{RandomForest with PCA Accuracy}
+      \\caption{RandomForest with PCA Accuracies}
       \\centering",
         t1,
     "\\end{minipage}%
     \\begin{minipage}{.5\\linewidth}
       \\centering
-        \\caption{RandomForest Confusion Matrix on complete data}",
+        \\caption{RandomForest Confusion Matrix}",
         t2,
     "\\end{minipage} 
     \\end{table}"
@@ -435,7 +416,7 @@ A great tools for us is EBImage which is package developed by @Pau2010 which pro
 @SJ2015 Shivangi et al, also talks about a good pipeline to this. Their work diffs in that they introduce quantitative metrics to mark irregulaties in shape. They also take into account the size of the lesion. However to this accurately they must have ensured that the each image is taken from the same distance and focus. We do not have that information regarding our dataset, so we must rely on ration. One of the interesting features proposed in using Circularity Index, it is the ration of (4*pi*Area)/(Perimeter*Perimeter). This is a geat metric becaus this is scale invariant.
 Of course is @SJ2015 and @Pau@2010, they do concentrate a fair amount on preprocessing steps like illumination and segmentation.
 
-Please check the Reference below in the end added with abstact summary.
+For more - Please check the Reference below in the end added with abstact summary.
 
 ### [10 Points, 1 page] Feature engineering.
 
@@ -446,12 +427,8 @@ Preprocessing steps :
 2. Convert Color to Grayscale but also preseve the color image.
 3. We run it through a low pass filter to remove hairs and scale markings.
 
-```{r fig.height = 6, fig.width = 8, out.width = '100%', fig.align = "center", echo = FALSE}
-  include_graphics("Pipeline.jpg")
-```
-
 Preprocessing steps :
-Do notice from the image above that the red channel does not yield very good preprocessing results while the green and blue channels are very successful in isolation the regions.
+Do notice from the preposseing pipeline image that the red channel does not yield very good preprocessing results while the green and blue channels are very successful in isolation the regions.
 
 We generate 5 features for each of the channels:
 
@@ -460,6 +437,10 @@ We generate 5 features for each of the channels:
 3. After applying the segmentation mask on the color image, we sum the total pixels that are in the segmented area.
 4. Regularity Parameter: The ration of area / perimeter
 5. Circularity Index: The ratio of (4*pi*area)/(perimeter^2)
+
+```{r fig.height = 4, fig.width = 6, out.width = '100%', fig.align = "center", echo = FALSE}
+  include_graphics("Pipeline.jpg")
+```
 
 ```{r}
   extract_features <- function(img_in) {
@@ -576,7 +557,7 @@ Here we choose to do Ridge instade of Lasso as we have limited number of featues
   plot(cv_glmnet_model)
 ```
 
-```{r fig.height = 3, fig.width = 10, out.width = '100%', fig.align = "center", echo = FALSE}
+```{r include = FALSE}
   #coef(cv_glmnet_model, s = "lambda.min")
   p6 <- cv_glmnet_model$glmnet.fit %>%
     tidy() %>%
@@ -608,13 +589,13 @@ By looking at this plot we can say that perimeter is the important fearure (whic
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{Lasso Results}
+      \\caption{Ridge Accuracies}
       \\centering",
         t1,
     "\\end{minipage}%
     \\begin{minipage}{.5\\linewidth}
       \\centering
-        \\caption{Lasso Confusion Matrix}",
+        \\caption{Ridge Confusion Matrix}",
         t2,
     "\\end{minipage} 
     \\end{table}"
@@ -626,17 +607,19 @@ The results above shows that we get comparitiverly very close good accuracy by u
 
 ### Classification Model 2. Random Forest
 
-We then decided to use the random forest as we have use it in Q1 with PCA and compare performance.
-
-```{r}
-  set.seed(1)
-  num_trees <- c(1,10,50,100,500,1000,1250,1500,2000)
-  num_nodes <- c(1, 5, 10)
+We then decided to use the random forest as we have use it in Q1 with PCA and compare performance with the Q2 data.
+```{r include = FALSE}
   all_data_x <- rbind(test.data[,-1],train.data[,-1])
   all_data_y <- c(test.data[,1],train.data[,1])
   best_i <- 1;
   best_j <- 1;
   best_all_error <- 100
+```
+
+```{r}
+  set.seed(1)
+  num_trees <- c(1,10,50,100,500,1000,1250,1500,2000)
+  num_nodes <- c(1, 5, 10)
   for(i in num_trees){
     for(j in num_nodes){
       rfModel = randomForest(formula = as.factor(y) ~ ., data = train.data, importance = T, ntree=i, nodesize = j)
@@ -664,14 +647,14 @@ We then decided to use the random forest as we have use it in Q1 with PCA and co
 
 Importance plot shows that Random Forest gives importance to features like area, cirucuarity index and color Blue channel providing better classification.
 
-```{r}
+```{r include = FALSE}
   yhat.train = predict(best_rfModel, train.data)
   temp <- cbind(as.numeric(as.character(yhat.train)), (train.data[, 1]))
   train_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
   train_accuracy = mean(train.data[,1] == yhat.train) * 100
 ```
 
-```{r}
+```{r include = FALSE}
   yhat.test = predict(best_rfModel, test.data)
   temp <- cbind(as.numeric(as.character(yhat.test)), (test.data[, 1]))
   test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
@@ -690,7 +673,7 @@ Importance plot shows that Random Forest gives importance to features like area,
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{RandomForest Train Results}
+      \\caption{RandomForest Accuracies}
       \\centering",
         t1,
     "\\end{minipage}%
@@ -704,7 +687,6 @@ Importance plot shows that Random Forest gives importance to features like area,
   
 ```
 Same as with question1, we run through a random forest model with a grid search on number of tress and nodesize. The best model was with 100 trees and 5 nodesize with an accuracy of 73%.
-
 By Making understandable features, we see from above that:
 
 1. Area, color and perimeter are key features. If the lesion contains multiple colors, then as @aad explained, it is a high chance of cancer.
