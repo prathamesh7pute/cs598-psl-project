@@ -292,9 +292,18 @@ SVM for Training data : First two Principle Components
   svm_test_confusionMatrix <- confusionMatrix(as.factor(svmPred), as.factor(pca.test[, 1]))
 ```
 
+```{r include = FALSE}
+  all_data_x <- rbind(test.data, train.data[, -1])
+  all_data_y <- c(pca.test[, 1], train.data[, 1])
+  svmPred <- predict(best_svm, all_data_x)
+  accuracy = mean(all_data_y == svmPred) * 100
+  svm_results = data.frame("Complete Data Accuracy" = as.numeric(accuracy,3))
+  svm_confusionMatrix <- confusionMatrix(as.factor(svmPred), as.factor(all_data_y))
+```
+
 ```{r echo=FALSE, results='asis'}
   t1 <- kable(svm_results, format = "latex", booktabs = T)
-  t2 <- kable(svm_test_confusionMatrix$table, format = "latex", booktabs = T)
+  t2 <- kable(svm_confusionMatrix$table, format = "latex", booktabs = T)
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
