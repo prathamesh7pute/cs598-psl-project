@@ -62,7 +62,7 @@ background-color: #e6ffe6;
 
 #### Goal
 
-Goal of this project is to identify malignent moles from benign moles. Provided image dataset has 150 benign and 150 malignent moles with varying resolutions. Some of the images have moles with hairs, markings on the microscope for measurement. This data has to be processed and classified to identify malignent moles from the benign ones.
+Goal of this project is to identify malignent moles from benign moles. Provided image dataset has 150 benign and 150 malignent moles with varying resolutions. Some of the images have moles with hairs, markings on the microscope for measurement. This data has to be processed and classified to identify malignent moles from the benign ones. We look for model interpretability as one of the key attributes.
 
 #### Approach
 
@@ -79,8 +79,8 @@ Approach for Q2 - as a starting point, we began from the directions provided by 
 #### Results
 
 ```{r results, echo=FALSE, results='asis'}
-  q1_results = data.frame("Model" = c("Lasso", "SVM", "Random Forest"), "Accuracy" = c("64.00%", "75.00%", "93.00%"))
-  q2_results = data.frame("Model" = c("Lasso", "Random Forest", ""), "Accuracy" = c("74.00%", "91.00%", ""))
+  q1_results = data.frame("Model" = c("Lasso", "SVM", "Random Forest"), "Accuracy" = c("64.00%", "75.00%", "77.8%"))
+  q2_results = data.frame("Model" = c("Lasso", "Random Forest", ""), "Accuracy" = c("74.00%", "73.33%", ""))
   
   t1 <- kable(q1_results, format = "latex", booktabs = T)
   t2 <- kable(q2_results, format = "latex", booktabs = T)
@@ -101,6 +101,10 @@ Approach for Q2 - as a starting point, we began from the directions provided by 
 ```
 
 We can see an improvement in classification accuracy for Lasso Model after we performed the transformation mentioned in second approach. We chose Lasso Model for both approaches as the model interpretability is high.
+
+We see that the random forest overfits the training data but performs not as well on the test data. In both parts we see that the random forest performs only as good as the other models on test data despite it reaching 100% accuracy on the training data.
+
+In part 2, where we develop our own features, we see that both Random Forest and Lasso Models predict differently on important features. However perimeter are important in both models. Both models conclude that the Red channel is of lesser iportance than Green and Blue channels. However the Random Forest gives importance to features like area, cirucuarity index and color(Blue channel providing better classification). The fact that all our generated features are based on literature, we can conclude that the Random Forest is a good model for classification.
 
 ### [5 Points, half a page] Data processing for Question 1.
 
@@ -376,20 +380,33 @@ This plot helps us in understanding the important variables chosen by the best r
 
 
 
+```{r}
+yhat.train = predict(best_rfModel, train.data)
+temp <- cbind(as.numeric(as.character(yhat.train)), (train.data[, 1]))
+train_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
+train_accuracy = mean(train.data[,1] == yhat.train) * 100
+```
+
+```{r}
+yhat.test = predict(best_rfModel, test.data)
+temp <- cbind(as.numeric(as.character(yhat.test)), (pca.test[, 1]))
+test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
+test_accuracy = mean(pca.test[,1] == yhat.test) * 100
+rf_results = data.frame("Train" = as.numeric(train_accuracy,3),"Test" = as.numeric(test_accuracy,3))
+```
+
 ```{r include = FALSE}
   rfPred <- predict(best_rfModel, all_data_x)
-  accuracy = mean(all_data_y == rfPred) * 100
-  rf_results = data.frame("Accuracy" = as.numeric(accuracy,3))
   rf_confusionMatrix <- confusionMatrix(as.factor(rfPred), as.factor(all_data_y))
 ```
 
 ```{r echo=FALSE, results='asis'}
   t1 <- kable(rf_results, format = "latex", booktabs = T)
-  t2 <- kable(rf_confusionMatrix$table, format = "latex", booktabs = T)
+  t3 <- kable(rf_confusionMatrix$table, format = "latex", booktabs = T)
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{RandomForest with PCA Results}
+      \\caption{RandomForest with PCA Accuracy}
       \\centering",
         t1,
     "\\end{minipage}%
@@ -403,7 +420,9 @@ This plot helps us in understanding the important variables chosen by the best r
   
 ```
 
-We run a random forest through a grid search through of number of trees (1 to 5000) and nodesize(1 to 50). We find that our best model is with 500 trees and a nodesize of 20. Our accuracy on the entire set is 93.33%
+We run a random forest through a grid search through of number of trees (1 to 5000) and nodesize(1 to 50). We find that our best model is with 1000 trees and a nodesize of 20. Our accuracy on the entire set is 93.33%
+
+Right off the bat we see that the Random Forest is overfitted. We achieve perfect accuracy on the training data set while out the 90 test data, 20 are classified incorrectly, hence the test accuracy of the data is 77.8%. A random forest will always overfit the training data. Despite this, random forest provides the test accuracy.
 
 ### [10 Points, 1 page] Literature review. You should search and read existing literature and summarize clinically relevant characteristics that could be used for skin cancer image diagnosis. There is no limitation on what type of literature you could use. However, the goal should be motivating your feature engineering approaches from a clinical and analytic point of view. Please give appropriate citations to the literature you read.
 
@@ -626,10 +645,23 @@ As with question1, we run through a random forest model with a grid search on nu
   varImpPlot(best_rfModel)
 ```
 
+```{r}
+yhat.train = predict(best_rfModel, train.data)
+temp <- cbind(as.numeric(as.character(yhat.train)), (train.data[, 1]))
+train_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(train.data)
+train_accuracy = mean(train.data[,1] == yhat.train) * 100
+```
+
+```{r}
+yhat.test = predict(best_rfModel, test.data)
+temp <- cbind(as.numeric(as.character(yhat.test)), (test.data[, 1]))
+test_error <- length(which(temp[, 1] != temp[, 2])) * 100 / nrow(test.data)
+test_accuracy = mean(test.data[,1] == yhat.test) * 100
+rf_results = data.frame("Train" = as.numeric(train_accuracy,3), "Test" = as.numeric(test_accuracy,3))
+```
+
 ```{r include = FALSE}
   rfPred <- predict(best_rfModel, all_data_x)
-  accuracy = mean(all_data_y == rfPred) * 100
-  rf_results = data.frame("Accuracy" = as.numeric(accuracy,3))
   rf_confusionMatrix <- confusionMatrix(as.factor(rfPred), as.factor(all_data_y))
 ```
 
@@ -639,7 +671,7 @@ As with question1, we run through a random forest model with a grid search on nu
     
   cat(c("\\begin{table}[!htb]
     \\begin{minipage}{.5\\linewidth}
-      \\caption{RandomForest Results}
+      \\caption{RandomForest Train Results}
       \\centering",
         t1,
     "\\end{minipage}%
@@ -654,6 +686,7 @@ As with question1, we run through a random forest model with a grid search on nu
 ```
 
 By Making understandable features, we see from above that:
+
  - Area, color and perimeter are key features. If the lesion contains multiple colors, then as @aad explained, it is a high chance of cancer.
  - The next set of feature are the regularity and circularity index respectively.
  - Red is the least important channel in the model. We saw during preprocessing as well, the Red plane didn not yield good results as well.
